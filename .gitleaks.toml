@@ -1,0 +1,11 @@
+title = "Review Tools release scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact upstream sanitizer dummy tokens, never real credentials"
+condition = "AND"
+paths = ['''(^|/)src/common/diagnostics/sanitizer\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^(glpat-1234567890abcdef|glptt-abc123xyz|glpat-abc123xyz|glpat-1234567890|mysecret)$''']

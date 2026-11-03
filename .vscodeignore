@@ -1,0 +1,10 @@
+src
+test
+node_modules
+extension.js.map
+desktop.package.json
+*.meta.json
+webviews/**/dependency-modules.json
+assets/logo.png
+assets/icons/gitlab-*.svg
+assets/images/empty-*.svg

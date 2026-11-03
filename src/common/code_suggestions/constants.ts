@@ -1,0 +1,5 @@
+export const DUO_CODE_SUGGESTIONS_CONFIG_NAMESPACE = 'gitlab.duoCodeSuggestions';
+
+export const CODE_SUGGESTIONS_NO_CREDIT = 'CODE_SUGGESTIONS_NO_CREDIT';
+
+export const CS_DISABLED_PROJECT_CHECK_INTERVAL = 300000; // 5 min

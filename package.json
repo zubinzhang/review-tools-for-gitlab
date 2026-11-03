@@ -1,5 +1,5 @@
 {
-  "name": "gitlab-review",
+  "name": "review-tools-for-gitlab",
   "displayName": "Review Tools for GitLab",
   "description": "Merge request review for GitLab 15.11 and later. Independent fork of GitLab for VS Code.",
   "version": "1.0.0",

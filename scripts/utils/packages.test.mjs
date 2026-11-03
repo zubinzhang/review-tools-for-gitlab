@@ -4,7 +4,8 @@ import { createDesktopPackageJson } from './packages.mjs';
 
 test('builds an independently identified GitLab Review extension', () => {
   const manifest = createDesktopPackageJson();
-  assert.equal(manifest.name, 'gitlab-review');
+  assert.equal(manifest.name, 'review-tools-for-gitlab');
+  assert.equal(`${manifest.publisher}.${manifest.name}`, 'zubinzhang.review-tools-for-gitlab');
   assert.equal(manifest.displayName, 'Review Tools for GitLab');
   assert.equal(manifest.icon, 'assets/review-tools.png');
   assert.equal(manifest.repository.url, 'https://github.com/zubinzhang/review-tools-for-gitlab');

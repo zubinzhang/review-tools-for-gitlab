@@ -81,7 +81,7 @@ const initializeTestEnvironment = async testRoot => {
       getLocalFeatureFlagService(),
     ),
   );
-  const ext = vscode.extensions.getExtension('zubinzhang.gitlab-review');
+  const ext = vscode.extensions.getExtension('zubinzhang.review-tools-for-gitlab');
   // run the extension activation and project load with a mock server
   const server = getServer();
   await ext.activate();

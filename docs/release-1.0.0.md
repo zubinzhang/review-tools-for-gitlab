@@ -9,8 +9,13 @@ An independent VS Code extension for merge request review on GitLab 15.11 and la
 - Use original split-code and comment icons, independent branding, and explicit upstream attribution.
 - Include third-party license notices in the VSIX and updated Vue compatibility dependencies.
 
-Install the attached `gitlab-review-1.0.0.vsix` using **Extensions: Install from VSIX**, then run
-**Developer: Reload Window**. Existing local users keep the `zubinzhang.gitlab-review` extension ID.
+Install the attached `review-tools-for-gitlab-1.0.0.vsix` using **Extensions: Install from VSIX**,
+then run **Developer: Reload Window**.
+
+This 1.0.0 release was reissued with extension ID `zubinzhang.review-tools-for-gitlab`. Uninstall
+the earlier `zubinzhang.gitlab-review` build before enabling the replacement, and authenticate again.
+Account secrets and review state do not automatically migrate between extension IDs. Existing
+review worktrees are preserved. The command namespace remains `gitlab-review.*`.
 
 See [release checks](release-1.0.0-checks.md) for test coverage, dependency-audit qualifications,
 source-history handling, and feature limitations. Arbitrary folding of changed functions is not

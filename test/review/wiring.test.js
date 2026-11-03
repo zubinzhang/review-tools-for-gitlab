@@ -3,7 +3,7 @@ const vscode = require('vscode');
 
 describe('Review Tools for GitLab extension wiring', () => {
   it('activates the independent review extension', () => {
-    const extension = vscode.extensions.getExtension('zubinzhang.gitlab-review');
+    const extension = vscode.extensions.getExtension('zubinzhang.review-tools-for-gitlab');
     assert.ok(extension?.isActive);
     assert.equal(extension.packageJSON.displayName, 'Review Tools for GitLab');
     assert.equal(extension.packageJSON.icon, 'assets/review-tools.png');
@@ -14,7 +14,7 @@ describe('Review Tools for GitLab extension wiring', () => {
   });
 
   it('registers every contributed review command', async () => {
-    const extension = vscode.extensions.getExtension('zubinzhang.gitlab-review');
+    const extension = vscode.extensions.getExtension('zubinzhang.review-tools-for-gitlab');
     const registered = new Set(await vscode.commands.getCommands(true));
     for (const command of extension.packageJSON.contributes.commands) {
       assert.ok(registered.has(command.command), command.command);

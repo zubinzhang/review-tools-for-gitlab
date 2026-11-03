@@ -3,7 +3,7 @@
 ![Review Tools icon](https://raw.githubusercontent.com/zubinzhang/review-tools-for-gitlab/main/src/assets/review-tools.png)
 
 A review-only fork of GitLab for VS Code, targeting GitLab **15.11 and later**.
-The extension ID is `zubinzhang.gitlab-review`; commands use the `gitlab-review.*` namespace.
+The extension ID is `zubinzhang.review-tools-for-gitlab`; commands use the `gitlab-review.*` namespace.
 This extension is not affiliated, endorsed, sponsored, or approved with or by GitLab Inc.
 GITLAB is a trademark of GitLab Inc. in the United States and other countries and regions.
 
@@ -95,7 +95,7 @@ npm run test:unit -- --runInBand src/desktop/review src/common/gitlab/check_vers
 node --test scripts/utils/packages.test.mjs scripts/utils/third_party_notices.test.mjs
 npm run test:review
 npm run package
-code --install-extension dist-desktop/gitlab-review-1.0.0.vsix --force
+code --install-extension dist-desktop/review-tools-for-gitlab-1.0.0.vsix --force
 ```
 
 Reload the VS Code window after installation. `npm run build:desktop` produces the unpacked extension
@@ -121,8 +121,16 @@ The source baseline is upstream commit `43dcf78d09b3dc88b33a75ca67b72030c6e44910
 
 The original review-tools icons in `src/assets/review-tools.*` and
 `src/assets/icons/review-tools.svg` are available under the same MIT license. GitLab logos are
-excluded from the extension package. The extension ID remains `zubinzhang.gitlab-review` so local
-upgrades retain accounts and review state; the GitHub repository name is `review-tools-for-gitlab`.
+excluded from the extension package. The extension ID and GitHub repository name use
+`review-tools-for-gitlab`.
+
+### Upgrading From the Initial Local Build
+
+Version 1.0.0 was reissued with extension ID `zubinzhang.review-tools-for-gitlab`. If you installed
+the earlier `zubinzhang.gitlab-review` build, uninstall that extension before enabling this one,
+install `review-tools-for-gitlab-1.0.0.vsix`, reload VS Code, and authenticate again. VS Code treats
+the new ID as a separate extension; account secrets, viewed-file state, and worktree cache metadata
+are not migrated. Existing review worktree directories are not deleted or modified.
 
 Builds generate `THIRD_PARTY_NOTICES.txt` from the actual extension and webview bundle inputs.
 License texts missing from npm archives are retained under `third_party/licenses/` with source URLs.

@@ -15,8 +15,10 @@ Repository: https://github.com/zubinzhang/review-tools-for-gitlab
 - Bundled dependency inputs generate `THIRD_PARTY_NOTICES.txt`. Missing npm license texts
   are supplied under `third_party/licenses/` with their provenance; vue-resize uses its
   declared MIT license and author attribution because its archive omits a license file.
-- The extension identifier remains `zubinzhang.gitlab-review` to retain existing account
-  storage and review state on upgrade. The public display name and repository are independent.
+- Version 1.0.0 was reissued with identifier `zubinzhang.review-tools-for-gitlab`. The earlier
+  `zubinzhang.gitlab-review` build must be uninstalled before enabling the replacement.
+  Accounts require authentication again; saved review state and cache metadata are not migrated.
+  Existing worktree directories are preserved. Commands retain the `gitlab-review.*` namespace.
 
 ## Credential and data checks
 

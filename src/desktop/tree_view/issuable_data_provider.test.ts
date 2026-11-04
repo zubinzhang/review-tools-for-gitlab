@@ -54,4 +54,18 @@ describe('Issuable Data Provider', () => {
     }
     expect(firstChild.label).toMatch(/no GitLab project/);
   });
+
+  it('does not display a repository twice when Git reports the same root more than once', async () => {
+    jest
+      .spyOn(gitExtensionWrapper, 'gitRepositories', 'get')
+      .mockReturnValue([gitRepository, gitRepository]);
+    jest.mocked(getProjectRepository).mockReturnValue(
+      createFakePartial<GitLabProjectRepository>({
+        getSelectedOrDefaultForRepository: jest.fn().mockReturnValue(undefined),
+        repositoryHasAmbiguousProjects: jest.fn().mockReturnValue(false),
+        onProjectChange: jest.fn(),
+      }),
+    );
+    expect(await provider.getChildren(undefined)).toHaveLength(1);
+  });
 });

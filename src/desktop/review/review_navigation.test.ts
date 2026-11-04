@@ -41,11 +41,26 @@ describe('ReviewNavigation', () => {
       listener = () => callback({ added: [], removed: [] });
       return new vscode.Disposable(() => {});
     });
-    jest.mocked(vscode.workspace.updateWorkspaceFolders).mockImplementation(() => {
-      setFolders(true);
-      listener();
-      return true;
-    });
+    jest
+      .mocked(vscode.workspace.updateWorkspaceFolders)
+      .mockImplementation((start, count, ...added) => {
+        const folders = [...(vscode.workspace.workspaceFolders ?? [])];
+        folders.splice(
+          start,
+          count ?? 0,
+          ...added.map((entry, index) => ({
+            ...entry,
+            name: entry.name ?? '',
+            index: start + index,
+          })),
+        );
+        Object.defineProperty(vscode.workspace, 'workspaceFolders', {
+          configurable: true,
+          value: folders,
+        });
+        listener();
+        return true;
+      });
   };
 
   beforeEach(async () => {
@@ -64,6 +79,8 @@ describe('ReviewNavigation', () => {
     };
     params = { ...request, path: '/main.ts', exists: true, changeType: 'added', side: 'head' };
     manager = createFakePartial<ReviewWorktreeManager>({
+      storagePath: directory,
+      previousStoragePaths: [],
       getPath: jest.fn().mockReturnValue(worktree),
       ensure: jest.fn().mockResolvedValue(worktree),
       getPrepared: jest.fn().mockResolvedValue(worktree),
@@ -560,6 +577,17 @@ describe('ReviewNavigation', () => {
     expect(manager.ensure).toHaveBeenCalledTimes(1);
     expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledTimes(1);
     expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('reattaches a previously prepared snapshot without prompting or creating a new worktree', async () => {
+    acceptPreparation();
+    jest.mocked(manager.findPrepared).mockResolvedValue(request);
+    jest.mocked(vscode.commands.executeCommand).mockResolvedValue([]);
+    await navigation.provideDefinition(document, position, token);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(manager.ensure).not.toHaveBeenCalled();
+    expect(manager.getPrepared).toHaveBeenCalledWith(request);
+    expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledTimes(1);
   });
 
   it('completes explicitly consented preparation even if clicking the notification cancels F12', async () => {

@@ -11,6 +11,7 @@ import {
 } from '../tree_view/items/changed_file_item';
 import { ReviewParams, fromReviewUri, toReviewUri } from './review_uri';
 import { ReviewWorktreeManager, ReviewWorktreeRequest } from './review_worktree';
+import { ReviewWorkspace } from './review_workspace';
 
 export const PREPARE_REVIEW_NAVIGATION = 'gitlab-review.prepareCodeNavigation';
 
@@ -72,14 +73,16 @@ export class ReviewNavigation
 
   #preparing = new Map<string, Promise<string | undefined>>();
 
-  #workspaceUpdates: Promise<boolean> = Promise.resolve(true);
-
   #definitionDiffs = new Map<string, DefinitionDiff>();
 
   constructor(
     private readonly manager: ReviewWorktreeManager,
     private readonly resolveRequest = getReviewNavigationRequest,
     private readonly resolveVersion = getReviewNavigationVersion,
+    private readonly workspace = new ReviewWorkspace(
+      manager.storagePath,
+      manager.previousStoragePaths,
+    ),
   ) {}
 
   listen(): vscode.Disposable {
@@ -454,16 +457,18 @@ export class ReviewNavigation
   ): Promise<string | undefined> {
     const explicit = mode === 'explicit';
     const root = this.manager.getPath(request);
-    const included = () =>
-      vscode.workspace.workspaceFolders?.some(
-        folder => path.resolve(folder.uri.fsPath) === path.resolve(root),
-      );
+    const included = () => this.workspace.isIncluded(root);
     if (mode === 'hover') return included() ? this.manager.getPrepared(request) : undefined;
     if (included()) return this.manager.ensure(request);
     if (!explicit && this.#declined.has(root)) return undefined;
     const pending = this.#preparing.get(root);
     if (pending) return pending;
     const preparation = (async () => {
+      if (await this.manager.findPrepared(request)) {
+        const prepared = await this.manager.getPrepared(request);
+        if (prepared)
+          return (await this.workspace.include(prepared, request)) ? prepared : undefined;
+      }
       const choice = await vscode.window.showInformationMessage(
         `Prepare an isolated worktree for MR !${request.mrIid} (${request.commit.slice(0, 8)}) and add it to this workspace for language analysis? Your current branch and files will not change. Only prepare code you trust: language tools may load project configuration. VS Code may reload extensions the first time; then retry F12.`,
         'Prepare Review Workspace',
@@ -479,10 +484,7 @@ export class ReviewNavigation
         },
         () => this.manager.ensure(request),
       );
-      this.#workspaceUpdates = this.#workspaceUpdates
-        .catch(() => false)
-        .then(() => this.#addWorkspaceFolder(target, request));
-      return (await this.#workspaceUpdates) ? target : undefined;
+      return (await this.workspace.include(target, request)) ? target : undefined;
     })();
     this.#preparing.set(root, preparation);
     try {
@@ -490,38 +492,6 @@ export class ReviewNavigation
     } finally {
       this.#preparing.delete(root);
     }
-  }
-
-  async #addWorkspaceFolder(root: string, request: ReviewWorktreeRequest): Promise<boolean> {
-    const included = () =>
-      Boolean(
-        vscode.workspace.workspaceFolders?.some(
-          folder => path.resolve(folder.uri.fsPath) === path.resolve(root),
-        ),
-      );
-    if (included()) return true;
-    return new Promise(resolve => {
-      let timeout: ReturnType<typeof setTimeout> | undefined;
-      let listener: vscode.Disposable | undefined;
-      const finish = (result: boolean) => {
-        clearTimeout(timeout);
-        listener?.dispose();
-        resolve(result);
-      };
-      listener = vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        if (included()) finish(true);
-      });
-      timeout = setTimeout(() => finish(false), 15000);
-      const accepted = vscode.workspace.updateWorkspaceFolders(
-        vscode.workspace.workspaceFolders?.length ?? 0,
-        0,
-        {
-          uri: vscode.Uri.file(root),
-          name: `Review !${request.mrIid} · ${request.commit.slice(0, 8)}`,
-        },
-      );
-      if (!accepted) finish(false);
-    });
   }
 
   #warn(uri: vscode.Uri, error: Error): void {

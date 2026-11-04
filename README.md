@@ -61,8 +61,22 @@ The sidebar starts in tree mode; **View as List** remains available when needed.
 Snapshots are cached under the extension's global storage, keyed by repository, MR, and full commit.
 The same revision is reused; new revisions get separate worktrees. Treat these as review snapshots:
 modified worktrees or mismatched file contents are rejected rather than used for incorrect jumps.
-Remove an unused review folder from the workspace, then use `git worktree remove <path>` from its
-original repository when you want to reclaim disk space. No worktrees are deleted automatically.
+Review snapshots, including caches from the earlier extension ID, are hidden from the MR project
+list. Duplicate workspace entries for the same repository, MR, and commit are consolidated.
+
+When all review and source tabs for a snapshot are closed, it is removed from the workspace after
+a 30-second quiet period. Its files remain cached, and the next explicit navigation request reuses
+and reattaches the prepared worktree without another preparation prompt. Hover alone does not
+reattach it. VS Code's Explorer still displays worktrees while language analysis needs them as
+workspace folders; you can also right-click one and choose **Remove Folder from Workspace**.
+
+On startup and when opening the review sidebar, background maintenance checks cached MRs directly.
+An MR missing from a filtered or paginated list is not considered closed. Only a confirmed closed
+or merged MR is eligible for cache deletion; open MRs retain one cache per revision, and clean idle
+duplicates may be removed. Open review/source tabs, unsaved documents, local changes, untracked or
+ignored files protect the corresponding worktree. Network failures preserve caches. Cleanup uses
+Git's normal worktree removal without forcing deletion. Status requests are limited to two at a
+time, and an open MR is not queried again for five minutes in the same session.
 Old-side definition navigation is not supported yet. **Open MR File in Review Worktree** preserves
 the active diff cursor position and also works for files absent from your current branch.
 
@@ -96,7 +110,7 @@ npm run test:unit -- --runInBand src/desktop/review src/common/gitlab/check_vers
 node --test scripts/utils/packages.test.mjs scripts/utils/third_party_notices.test.mjs
 npm run test:review
 npm run package
-code --install-extension dist-desktop/review-tools-for-gitlab-1.0.0.vsix --force
+code --install-extension dist-desktop/review-tools-for-gitlab-1.0.1.vsix --force
 ```
 
 Reload the VS Code window after installation. `npm run build:desktop` produces the unpacked extension
@@ -129,9 +143,10 @@ excluded from the extension package. The extension ID and GitHub repository name
 
 Version 1.0.0 was reissued with extension ID `zubinzhang.review-tools-for-gitlab`. If you installed
 the earlier `zubinzhang.gitlab-review` build, uninstall that extension before enabling this one,
-install `review-tools-for-gitlab-1.0.0.vsix`, reload VS Code, and authenticate again. VS Code treats
-the new ID as a separate extension; account secrets, viewed-file state, and worktree cache metadata
-are not migrated. Existing review worktree directories are not deleted or modified.
+install `review-tools-for-gitlab-1.0.1.vsix`, reload VS Code, and authenticate again. VS Code treats
+the new ID as a separate extension; account secrets and viewed-file state are not migrated.
+Prepared review worktrees under the earlier ID are recognized and reused, with duplicate and
+completed-review caches subject to the cleanup rules above.
 
 Builds generate `THIRD_PARTY_NOTICES.txt` from the actual extension and webview bundle inputs.
 License texts missing from npm archives are retained under `third_party/licenses/` with source URLs.

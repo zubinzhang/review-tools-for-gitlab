@@ -4,6 +4,7 @@ import { gitExtensionWrapper } from '../git/git_extension_wrapper';
 import { GitRepository } from '../git/new_git';
 import { getProjectRepository } from '../gitlab/gitlab_project_repository';
 import { extensionConfigurationService } from '../../common/utils/extension_configuration_service';
+import { canonicalReviewPath } from '../review/review_worktree';
 import { onSidebarViewStateChange } from './sidebar_view_state';
 import { ItemModel } from './items/item_model';
 import { MultipleProjectsItem } from './items/multiple_projects_item';
@@ -36,7 +37,15 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
     this.#children.forEach(ch => ch.dispose());
     if (!this.#extensionState.isValid()) return []; // show welcome screen
     const { customQueries } = extensionConfigurationService.getConfiguration();
-    const repositories = gitExtensionWrapper.gitRepositories.filter(this.includeRepository);
+    const seen = new Set<string>();
+    const repositories = gitExtensionWrapper.gitRepositories
+      .filter(this.includeRepository)
+      .filter(repository => {
+        const root = canonicalReviewPath(repository.rootFsPath);
+        if (seen.has(root)) return false;
+        seen.add(root);
+        return true;
+      });
     const children = repositories.map(r => {
       const selected = getProjectRepository().getSelectedOrDefaultForRepository(r.rootFsPath);
       if (selected) {

@@ -3,8 +3,18 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
+import { existsSync, realpathSync } from 'node:fs';
+import { log } from '../../common/log';
 
 const execute = promisify(execFile);
+
+export function canonicalReviewPath(filename: string): string {
+  try {
+    return realpathSync.native(filename);
+  } catch {
+    return path.resolve(filename);
+  }
+}
 
 export interface ReviewWorktreeRequest {
   repositoryRoot: string;
@@ -15,28 +25,107 @@ export interface ReviewWorktreeRequest {
   commit: string;
 }
 
+export interface ReviewWorktreeSnapshot {
+  root: string;
+  request: ReviewWorktreeRequest;
+}
+
 export class ReviewWorktreeManager {
   #pending = new Map<string, Promise<string>>();
 
   constructor(
-    private readonly storagePath: string,
+    readonly storagePath: string,
     private readonly gitPath: string,
+    readonly previousStoragePaths: readonly string[] = [],
   ) {}
 
   getPath(
     request: Pick<ReviewWorktreeRequest, 'repositoryRoot' | 'projectId' | 'mrId' | 'commit'>,
   ): string {
-    const key = createHash('sha256')
-      .update(
-        JSON.stringify([
-          path.resolve(request.repositoryRoot),
-          request.projectId,
-          request.mrId,
-          request.commit,
-        ]),
+    const candidates = this.#paths(request);
+    return candidates.find(candidate => existsSync(candidate)) ?? candidates[0];
+  }
+
+  #paths(
+    request: Pick<ReviewWorktreeRequest, 'repositoryRoot' | 'projectId' | 'mrId' | 'commit'>,
+  ): string[] {
+    const roots = [
+      ...new Set([
+        canonicalReviewPath(request.repositoryRoot),
+        path.resolve(request.repositoryRoot),
+      ]),
+    ];
+    return [this.storagePath, ...this.previousStoragePaths].flatMap(storage =>
+      roots.map(repositoryRoot => {
+        const key = createHash('sha256')
+          .update(JSON.stringify([repositoryRoot, request.projectId, request.mrId, request.commit]))
+          .digest('hex');
+        return path.join(storage, `${key.slice(0, 24)}-${request.commit.slice(0, 12)}`);
+      }),
+    );
+  }
+
+  async listPrepared(): Promise<ReviewWorktreeSnapshot[]> {
+    const groups = await Promise.all(
+      [this.storagePath, ...this.previousStoragePaths].map(async storage => {
+        const files = await fs.readdir(storage).catch(() => []);
+        const entries = await Promise.all(
+          files
+            .filter(filename => /^[a-f0-9]{24}-[a-f0-9]{12}\.json$/.test(filename))
+            .map(async filename => {
+              try {
+                const root = path.join(storage, filename.slice(0, -5));
+                const request: ReviewWorktreeRequest = JSON.parse(
+                  await fs.readFile(path.join(storage, filename), 'utf8'),
+                );
+                this.#validate(request);
+                if (
+                  !this.#paths(request).some(
+                    candidate => path.resolve(candidate) === path.resolve(root),
+                  ) ||
+                  !existsSync(root)
+                )
+                  return undefined;
+                return { root, request };
+              } catch {
+                return undefined;
+              }
+            }),
+        );
+        return entries.filter((entry): entry is ReviewWorktreeSnapshot => Boolean(entry));
+      }),
+    );
+    const unique = new Map(
+      groups.flat().map(snapshot => [canonicalReviewPath(snapshot.root), snapshot]),
+    );
+    return [...unique.values()];
+  }
+
+  async removePrepared(
+    snapshot: ReviewWorktreeSnapshot,
+    canRemove: () => boolean,
+  ): Promise<boolean> {
+    const { root, request } = snapshot;
+    try {
+      this.#validate(request);
+      if (
+        !this.#paths(request).some(candidate => path.resolve(candidate) === path.resolve(root)) ||
+        this.#pending.has(root)
       )
-      .digest('hex');
-    return path.join(this.storagePath, `${key.slice(0, 24)}-${request.commit.slice(0, 12)}`);
+        return false;
+      await this.#verify(request, root);
+      if (await this.#git(root, ['status', '--porcelain', '--untracked-files=all', '--ignored']))
+        return false;
+      if (!canRemove()) return false;
+      await this.#git(request.repositoryRoot, ['worktree', 'remove', '--', root]);
+      await fs.unlink(`${root}.json`).catch(error => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      return true;
+    } catch (error) {
+      log.debug(`Review snapshot retained during cleanup: ${error.message}`);
+      return false;
+    }
   }
 
   async ensure(request: ReviewWorktreeRequest): Promise<string> {
@@ -86,7 +175,7 @@ export class ReviewWorktreeManager {
       );
       this.#validate(saved);
       if (
-        saved.repositoryRoot !== request.repositoryRoot ||
+        canonicalReviewPath(saved.repositoryRoot) !== canonicalReviewPath(request.repositoryRoot) ||
         saved.projectId !== request.projectId ||
         saved.mrId !== request.mrId ||
         saved.commit !== request.commit

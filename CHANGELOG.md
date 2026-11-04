@@ -3,6 +3,29 @@
 Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
 for provenance; upstream entries do not describe features enabled in this review-only fork.
 
+## [1.0.1](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.1) — 2026-11-04
+
+### Fixed
+
+- Hide review worktrees from the MR project tree across both the current and previous extension IDs.
+- Deduplicate workspace folders by repository, MR, and full commit, including canonical path aliases.
+- Remove stale workspace entries when their managed cache directories no longer exist.
+- Reuse prepared worktrees after workspace removal without another preparation prompt or a second
+  cache under the new extension ID. Different commits remain separate review snapshots.
+
+### Cache Maintenance
+
+- Detach idle review workspaces after a 30-second quiet period, retaining reusable files on disk.
+- On startup and when opening Review, remove idle clean duplicates and caches for MRs confirmed
+  closed or merged. Missing entries in filtered or paginated lists never trigger deletion.
+- Preserve open review/source files, unsaved edits, tracked/untracked/ignored local data, and caches
+  whose MR status cannot be verified. Cleanup uses Git's normal worktree removal without force.
+- Share status checks across revisions, limit concurrent requests to two, and avoid rechecking an
+  open MR within five minutes. No remote status requests are added to hover or definition queries.
+
+See the [release checks](https://github.com/zubinzhang/review-tools-for-gitlab/blob/v1.0.1/docs/release-1.0.1-checks.md)
+for test results and performance measurement limits.
+
 ## [1.0.0](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.0) — 2026-11-03
 
 ### Added

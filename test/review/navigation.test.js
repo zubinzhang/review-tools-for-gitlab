@@ -7,6 +7,8 @@ const { promisify } = require('util');
 const vscode = require('vscode');
 const { ReviewWorktreeManager } = require('../../src/desktop/review/review_worktree');
 const { ReviewNavigation } = require('../../src/desktop/review/review_navigation');
+const { ReviewWorkspace } = require('../../src/desktop/review/review_workspace');
+const { ReviewCacheCleanup } = require('../../src/desktop/review/review_cache_cleanup');
 const { toReviewUri, fromReviewUri } = require('../../src/desktop/review/review_uri');
 const { CommentingRangeProvider } = require('../../src/desktop/review/commenting_range_provider');
 const { REVIEW_URI_SCHEME } = require('../../src/desktop/constants');
@@ -37,6 +39,7 @@ describe('Review definition navigation with real language services', function re
   let base;
   let navigation;
   let version;
+  let manager;
   const disposables = [];
 
   const git = async (...args) => (await execute('git', ['-C', repository, ...args])).stdout.trim();
@@ -142,7 +145,7 @@ describe('Review definition navigation with real language services', function re
     };
     await git('reset', '--hard', base);
     await fs.appendFile(path.join(repository, 'notes.txt'), 'unsaved local work\n');
-    const manager = new ReviewWorktreeManager(path.join(directory, 'cache'), 'git');
+    manager = new ReviewWorktreeManager(path.join(directory, 'cache'), 'git');
     snapshot = await manager.ensure(request);
     await changeFolder(snapshot, true);
     version = {
@@ -415,5 +418,56 @@ describe('Review definition navigation with real language services', function re
       version,
     ).provideCommentingRanges({ uri: input.modified.with({ scheme: REVIEW_URI_SCHEME }) });
     assert.ok(ranges.some(range => range.start.line === 5));
+  });
+
+  it('detaches closed review tabs and reuses the exact snapshot when review navigation resumes', async () => {
+    const workspace = new ReviewWorkspace(path.join(directory, 'cache'));
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    assert.strictEqual(await workspace.removeInactive(), true);
+    assert.strictEqual(workspace.isIncluded(snapshot), false);
+    assert.strictEqual(await fs.readFile(path.join(snapshot, 'src/main.ts'), 'utf8'), typescript);
+    assert.strictEqual(await manager.ensure(request), snapshot);
+    assert.strictEqual(await workspace.include(snapshot, request), true);
+    await definitionInAddedFile(
+      reviewUri('src/main.ts'),
+      new vscode.Position(1, 2),
+      'src/added.ts',
+    );
+    assert.strictEqual(
+      (await git('worktree', 'list', '--porcelain')).match(/^worktree /gm).length,
+      2,
+    );
+  });
+
+  it('cleans pre-existing duplicate caches across extension IDs without deleting the reusable revision', async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    const legacy = path.join(directory, 'legacy-cache');
+    const duplicate = await new ReviewWorktreeManager(legacy, 'git').ensure(request);
+    await changeFolder(duplicate, true);
+    const workspace = new ReviewWorkspace(path.join(directory, 'cache'), [legacy]);
+    await workspace.deduplicate();
+    assert.strictEqual(workspace.isIncluded(duplicate), false);
+    assert.strictEqual(workspace.isIncluded(snapshot), true);
+    const reusable = new ReviewWorktreeManager(path.join(directory, 'cache'), 'git', [legacy]);
+    await new ReviewCacheCleanup(reusable, workspace, async () => 'opened').run();
+    await assert.rejects(fs.access(duplicate));
+    assert.strictEqual(await reusable.ensure(request), snapshot);
+  });
+
+  it('retains an open merged review cache and removes it safely once its source editor closes', async () => {
+    const workspace = new ReviewWorkspace(path.join(directory, 'cache'));
+    await vscode.window.showTextDocument(vscode.Uri.file(path.join(snapshot, 'src/main.ts')));
+    const cleanup = new ReviewCacheCleanup(manager, workspace, async () => 'merged');
+    await cleanup.run();
+    await fs.access(snapshot);
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await cleanup.run();
+    assert.strictEqual(workspace.isIncluded(snapshot), false);
+    await assert.rejects(fs.access(snapshot));
+    assert.strictEqual(await git('rev-parse', 'HEAD'), base);
+    assert.strictEqual(
+      await fs.readFile(path.join(repository, 'notes.txt'), 'utf8'),
+      'base\nunsaved local work\n',
+    );
   });
 });

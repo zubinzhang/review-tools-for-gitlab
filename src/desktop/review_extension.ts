@@ -56,6 +56,8 @@ import { openInGitLab, copyLinkToClipboard } from './commands/open_in_gitlab';
 import { checkoutMrBranch } from './commands/checkout_mr_branch';
 import { GitExtension } from './api/git';
 import { ReviewWorktreeManager } from './review/review_worktree';
+import { ReviewWorkspace } from './review/review_workspace';
+import { ReviewCacheCleanup } from './review/review_cache_cleanup';
 import { ReviewNavigation, PREPARE_REVIEW_NAVIGATION } from './review/review_navigation';
 import {
   toggleResolved,
@@ -93,15 +95,25 @@ export async function activate(context: vscode.ExtensionContext) {
   await state.init();
 
   const reviewStorage = vscode.Uri.joinPath(context.globalStorageUri, 'review-worktrees').fsPath;
-  const provider = new IssuableDataProvider(state, repository => {
-    const relative = path.relative(reviewStorage, repository.rootFsPath);
-    return relative.startsWith(`..${path.sep}`) || relative === '..' || path.isAbsolute(relative);
-  });
+  const previousReviewStorages = [
+    path.join(
+      path.dirname(context.globalStorageUri.fsPath),
+      'zubinzhang.gitlab-review',
+      'review-worktrees',
+    ),
+  ];
+  const reviewWorkspace = new ReviewWorkspace(reviewStorage, previousReviewStorages);
+  await reviewWorkspace.deduplicate();
+  const provider = new IssuableDataProvider(
+    state,
+    repository => !reviewWorkspace.isReviewRoot(repository.rootFsPath),
+  );
   const tree = vscode.window.createTreeView('gitlabReview.mergeRequests', {
     treeDataProvider: provider,
   });
   context.subscriptions.push(
     outputChannel,
+    reviewWorkspace.listen(),
     gitExtensionWrapper,
     tree,
     setupViewedCheckboxes(tree, viewedDecorationProvider),
@@ -124,8 +136,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const gitPath =
     vscode.extensions.getExtension<GitExtension>('vscode.git')?.exports.getAPI(1).git.path ?? 'git';
-  const navigation = new ReviewNavigation(new ReviewWorktreeManager(reviewStorage, gitPath));
+  const worktrees = new ReviewWorktreeManager(reviewStorage, gitPath, previousReviewStorages);
+  const cleanup = new ReviewCacheCleanup(worktrees, reviewWorkspace);
+  cleanup.run().catch(handleError);
+  const navigation = new ReviewNavigation(worktrees, undefined, undefined, reviewWorkspace);
   context.subscriptions.push(
+    tree.onDidChangeVisibility(event => {
+      if (event.visible) cleanup.run().catch(handleError);
+    }),
     navigation.listen(),
     vscode.languages.registerDefinitionProvider({ scheme: REVIEW_URI_SCHEME }, navigation),
     vscode.languages.registerImplementationProvider({ scheme: REVIEW_URI_SCHEME }, navigation),

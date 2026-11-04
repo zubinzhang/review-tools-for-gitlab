@@ -64,6 +64,48 @@ describe('ReviewWorktreeManager', () => {
     expect((await git('worktree', 'list', '--porcelain')).match(/^worktree /gm)).toHaveLength(2);
   });
 
+  it('reuses a prepared snapshot from the previous extension ID', async () => {
+    const previousStorage = path.join(directory, 'previous-cache');
+    const previous = new ReviewWorktreeManager(previousStorage, 'git');
+    const original = await previous.ensure(request);
+    const current = new ReviewWorktreeManager(path.join(directory, 'cache'), 'git', [
+      previousStorage,
+    ]);
+    expect(current.getPath(request)).toBe(original);
+    expect(await current.ensure(request)).toBe(original);
+    expect(await current.findPrepared(request)).toEqual(request);
+    expect((await git('worktree', 'list', '--porcelain')).match(/^worktree /gm)).toHaveLength(2);
+  });
+
+  it('lists and removes only clean registered review snapshots after final eligibility checks', async () => {
+    const target = await manager.ensure(request);
+    expect(await manager.listPrepared()).toEqual([{ root: target, request }]);
+    expect(await manager.removePrepared({ root: target, request }, () => false)).toBe(false);
+    expect(await manager.removePrepared({ root: target, request }, () => true)).toBe(true);
+    await expect(fs.access(target)).rejects.toThrow();
+    await expect(fs.access(`${target}.json`)).rejects.toThrow();
+    expect(await git('rev-parse', 'HEAD')).toBe(baseCommit);
+    expect(await fs.readFile(path.join(repositoryRoot, 'existing.ts'), 'utf8')).toContain(
+      'local changes',
+    );
+  });
+
+  it.each(['tracked', 'untracked', 'ignored'])(
+    'preserves snapshots with %s local data during cleanup',
+    async kind => {
+      const root = await manager.ensure(request);
+      if (kind === 'tracked') await fs.writeFile(path.join(root, 'added.ts'), 'local changes');
+      if (kind === 'untracked') await fs.writeFile(path.join(root, 'notes.txt'), 'local work');
+      if (kind === 'ignored') {
+        await fs.appendFile(path.join(repositoryRoot, '.git/info/exclude'), '\ndependencies/\n');
+        await fs.mkdir(path.join(root, 'dependencies'));
+        await fs.writeFile(path.join(root, 'dependencies/local.txt'), 'keep');
+      }
+      expect(await manager.removePrepared({ root, request }, () => true)).toBe(false);
+      expect(await fs.readFile(`${root}.json`, 'utf8')).toContain(request.commit);
+    },
+  );
+
   it('only maps files present in the exact commit, not generated files or directories', async () => {
     expect(await manager.hasFile(request, 'added.ts')).toBe(true);
     expect(await manager.hasFile(request, 'existing.ts')).toBe(true);

@@ -9,6 +9,7 @@ GITLAB is a trademark of GitLab Inc. in the United States and other countries an
 
 Source and issue tracker: [review-tools-for-gitlab](https://github.com/zubinzhang/review-tools-for-gitlab).
 Download the VSIX from [GitHub Releases](https://github.com/zubinzhang/review-tools-for-gitlab/releases).
+See the [changelog](CHANGELOG.md) for release history and upgrade notes.
 
 ## Review Features
 

@@ -1,3 +1,48 @@
+# Changelog
+
+Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
+for provenance; upstream entries do not describe features enabled in this review-only fork.
+
+## [1.0.0](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.0) — 2026-11-03
+
+### Added
+
+- Review merge requests on GitLab 15.11 and later using an independent VS Code extension.
+- Browse changed files in a directory tree by default, with an optional list view.
+- Open side-by-side MR diffs and manage inline comments, replies, edits, and resolved threads.
+- Navigate definitions and implementations from the new side of a diff, including newly added
+  files and functions, using an isolated worktree at the exact MR commit.
+- Reopen changed navigation targets in the same MR diff with commentable added lines.
+- Preview function signatures and documentation on hover after preparing the review workspace.
+
+### Changed
+
+- Limit the activated extension to merge request review; omit AI, Duo, pipelines, issues,
+  snippets, and security-scanning contributions.
+- Introduce the Review Tools for GitLab name, original icons, and independent repository links.
+- Include upstream MIT attribution and generated third-party dependency license notices.
+- Update Vue and its compatibility runtime to 3.5.44.
+
+### Upgrade Notes
+
+- Version 1.0.0 was reissued with extension ID `zubinzhang.review-tools-for-gitlab` and package
+  `review-tools-for-gitlab-1.0.0.vsix`.
+- Uninstall the earlier `zubinzhang.gitlab-review` build, install the replacement, reload VS Code,
+  and authenticate again. Account secrets and review state do not automatically migrate.
+- Existing review worktrees are preserved. Commands retain the `gitlab-review.*` namespace.
+
+### Known Limitations
+
+- Semantic navigation and hover require a prepared MR worktree and a configured language extension;
+  the old side of a diff is not supported.
+- The native diff can collapse unchanged regions but cannot fold arbitrary changed functions.
+- See [release checks](https://github.com/zubinzhang/review-tools-for-gitlab/blob/v1.0.0/docs/release-1.0.0-checks.md)
+  for validation and dependency-audit qualifications.
+
+## Upstream History
+
+The entries below are inherited from [GitLab for VS Code](https://gitlab.com/gitlab-org/gitlab-vscode-extension).
+
 ## **pre-release**  [7.4.1](https://gitlab.com/gitlab-org/gitlab-vscode-extension/compare/v7.4.0...v7.4.1) (2026-11-02)
 * **build:** define import.meta.url in the desktop bundle ([b140f71](https://gitlab.com/gitlab-org/gitlab-vscode-extension/commit/b140f71cd624b241f7bd36701e20816e1be84482)) by Dylan Bernardi
 * **observability:** disable OTel logs in NodeSDK ([dd9d36e](https://gitlab.com/gitlab-org/gitlab-vscode-extension/commit/dd9d36e85dd0ce5195464711ba800826d2549aec)) by Dylan Bernardi

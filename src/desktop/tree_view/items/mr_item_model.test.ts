@@ -171,6 +171,25 @@ describe('MrItemModel', () => {
     expect(children.length).toBe(1);
   });
 
+  it('shares an in-flight diff version load between automatic preparation and expanding the MR', async () => {
+    const version = item.getReviewVersion();
+    await Promise.all([version, item.getChildren()]);
+    expect(gitLabService.getMrDiff).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves MR identity through title changes and separates the same MR in different queries', () => {
+    const first = new MrItemModel(mr, projectInRepository, 'query-a');
+    const renamed = new MrItemModel(
+      { ...mr, title: 'Updated title' },
+      projectInRepository,
+      'query-a',
+    );
+    const other = new MrItemModel(mr, projectInRepository, 'query-b');
+    expect(first.getTreeItem().id).toBeTruthy();
+    expect(first.getTreeItem().id).toBe(renamed.getTreeItem().id);
+    expect(first.getTreeItem().id).not.toBe(other.getTreeItem().id);
+  });
+
   describe('commenting range', () => {
     it('should not add a commenting range provider if user does not have permission to comment', async () => {
       canUserCommentOnMr = false;

@@ -23,6 +23,7 @@ import { log } from '../../../common/log';
 import { MODIFIED } from '../../constants';
 import { findDiffWithPath } from '../../review/utils/find_diff_with_path';
 import { getMrKey } from '../../review/viewed_files_store';
+import { reviewProjectId } from '../review_tree_id';
 import { ChangedFolderItem, FolderTreeItem } from './changed_folder_item';
 import { ItemModel } from './item_model';
 import { ChangedFileItem, HasCommentsFn, getChangeType } from './changed_file_item';
@@ -84,11 +85,17 @@ const uriForDiscussion = (
 export class MrItemModel extends ItemModel {
   #allUrisWithComments?: string[];
 
+  #versionLoad?: Promise<RestMrVersion>;
+
   readonly mr: RestMr;
 
   readonly projectInRepository: ProjectInRepository;
 
-  constructor(mr: RestMr, projectInRepository: ProjectInRepository) {
+  constructor(
+    mr: RestMr,
+    projectInRepository: ProjectInRepository,
+    private readonly parentId = reviewProjectId(projectInRepository),
+  ) {
     super();
     this.mr = mr;
     this.projectInRepository = projectInRepository;
@@ -104,6 +111,7 @@ export class MrItemModel extends ItemModel {
       item.iconPath = vscode.Uri.parse(author.avatar_url);
     }
     item.description = nameForStatus[state];
+    item.id = `${this.parentId}/mr/${this.mr.id}`;
     item.contextValue = `web-openable;mr-item-from-${this.isFromFork ? 'fork' : 'same-project'}`;
     return item;
   }
@@ -141,7 +149,7 @@ export class MrItemModel extends ItemModel {
 
   async getChildren(): Promise<vscode.TreeItem[]> {
     try {
-      const { mrVersion } = await mrCache.reloadMr(this.mr, this.projectInRepository);
+      const mrVersion = await this.getReviewVersion();
 
       // don't initialize comments twice
       if (!this.#allUrisWithComments) {
@@ -191,6 +199,16 @@ export class MrItemModel extends ItemModel {
       handleError(new UserFriendlyError('Failed to fetch details of the MR', e));
       return [this.#overviewItem];
     }
+  }
+
+  getReviewVersion(): Promise<RestMrVersion> {
+    this.#versionLoad ??= mrCache
+      .reloadMr(this.mr, this.projectInRepository)
+      .then(cached => cached.mrVersion)
+      .finally(() => {
+        this.#versionLoad = undefined;
+      });
+    return this.#versionLoad;
   }
 
   async #addAllCommentsToVsCode(

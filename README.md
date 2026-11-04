@@ -37,13 +37,20 @@ Git remotes using SSH are supported; the API URL comes from the authenticated ac
 
 ## Code Navigation
 
-On the right side of an MR diff, use **Go to Definition** (F12 / Command-click), or run
-**Review Tools for GitLab: Prepare MR Code Navigation**. The first request asks permission to create a detached
-worktree at the exact reviewed commit and add it as a workspace folder. Your current branch,
-working files, and uncommitted changes stay untouched. Browsing MRs alone creates no worktrees.
+In a trusted workspace, clicking or expanding an MR automatically prepares a detached worktree
+at that MR's reviewed commit and adds it as a workspace folder for language analysis. Loading the
+MR list alone creates no worktrees. Your current branch, working files, and uncommitted changes
+stay untouched. Prepared snapshots are reused, without a preparation dialog on MR selection.
 
-VS Code may reload extensions when converting a single-folder window to a multi-root workspace;
-reopen the MR diff and retry F12 if that happens. Wait for your language extension to finish indexing.
+Use **Go to Definition** (F12 / Command-click) on the right side of an MR diff once the language
+extension finishes indexing. **Review Tools for GitLab: Prepare MR Code Navigation** remains
+available for manually opened review documents.
+
+Worktree-only Git/project updates no longer rebuild the visible MR tree. Stable node identities
+preserve selection and expansion. VS Code may still reload extensions when converting a
+single-folder window to a multi-root workspace; the extension saves the selected MR beforehand
+and restores it if it remains available in the same project/query. This does not prevent VS Code's
+first workspace-conversion reload or replace language-service indexing.
 Install and configure the relevant language extension (for example, Go with gopls); project dependencies
 and build settings must be available in the review worktree. This fork does not install dependencies
 or execute project setup scripts automatically. Git fetches use your existing Git credentials,
@@ -64,9 +71,10 @@ modified worktrees or mismatched file contents are rejected rather than used for
 Review snapshots, including caches from the earlier extension ID, are hidden from the MR project
 list. Duplicate workspace entries for the same repository, MR, and commit are consolidated.
 
-When all review and source tabs for a snapshot are closed, it is removed from the workspace after
-a 30-second quiet period. Its files remain cached, and the next explicit navigation request reuses
-and reattaches the prepared worktree without another preparation prompt. Hover alone does not
+While an MR is selected in the visible review sidebar, its worktree remains attached even before
+a diff tab opens. When the MR is no longer selected and all review/source tabs are closed, the
+worktree detaches after a 30-second quiet period. Its files remain cached; selecting the MR again
+or requesting navigation reuses and reattaches it without another preparation prompt. Hover alone does not
 reattach it. VS Code's Explorer still displays worktrees while language analysis needs them as
 workspace folders; you can also right-click one and choose **Remove Folder from Workspace**.
 
@@ -80,10 +88,10 @@ time, and an open MR is not queried again for five minutes in the same session.
 Old-side definition navigation is not supported yet. **Open MR File in Review Worktree** preserves
 the active diff cursor position and also works for files absent from your current branch.
 
-After preparing the review workspace, hover over a function on the right side of the MR diff to
+After the MR's workspace is prepared, hover over a function on the right side of the MR diff to
 preview its signature and documentation comments without leaving the diff. Results come from the
 language extension against that exact MR commit, including newly added functions. Hovering alone
-never creates worktrees or asks for preparation; run **Prepare MR Code Navigation** first if needed.
+never creates worktrees or asks for preparation; select the MR or run **Prepare MR Code Navigation** if needed.
 Old-side hover is not supported. Language indexing, dependencies, and build settings affect which
 documentation is available. Hover documentation cannot execute trusted Markdown command links.
 
@@ -110,7 +118,7 @@ npm run test:unit -- --runInBand src/desktop/review src/common/gitlab/check_vers
 node --test scripts/utils/packages.test.mjs scripts/utils/third_party_notices.test.mjs
 npm run test:review
 npm run package
-code --install-extension dist-desktop/review-tools-for-gitlab-1.0.1.vsix --force
+code --install-extension dist-desktop/review-tools-for-gitlab-1.0.2.vsix --force
 ```
 
 Reload the VS Code window after installation. `npm run build:desktop` produces the unpacked extension
@@ -143,7 +151,7 @@ excluded from the extension package. The extension ID and GitHub repository name
 
 Version 1.0.0 was reissued with extension ID `zubinzhang.review-tools-for-gitlab`. If you installed
 the earlier `zubinzhang.gitlab-review` build, uninstall that extension before enabling this one,
-install `review-tools-for-gitlab-1.0.1.vsix`, reload VS Code, and authenticate again. VS Code treats
+install `review-tools-for-gitlab-1.0.2.vsix`, reload VS Code, and authenticate again. VS Code treats
 the new ID as a separate extension; account secrets and viewed-file state are not migrated.
 Prepared review worktrees under the earlier ID are recognized and reused, with duplicate and
 completed-review caches subject to the cleanup rules above.

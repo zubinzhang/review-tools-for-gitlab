@@ -590,6 +590,21 @@ describe('ReviewNavigation', () => {
     expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledTimes(1);
   });
 
+  it('automatically prepares an explicitly selected MR without a confirmation dialog', async () => {
+    acceptPreparation();
+    await navigation.prepareReview(request);
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(manager.ensure).toHaveBeenCalledWith(request);
+    expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not automatically prepare selected MRs in an untrusted workspace', async () => {
+    Object.defineProperty(vscode.workspace, 'isTrusted', { configurable: true, value: false });
+    await navigation.prepareReview(request);
+    expect(manager.ensure).not.toHaveBeenCalled();
+    expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
+  });
+
   it('completes explicitly consented preparation even if clicking the notification cancels F12', async () => {
     acceptPreparation();
     const cancelledByClick = { ...token, isCancellationRequested: false };

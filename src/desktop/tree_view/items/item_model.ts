@@ -8,6 +8,9 @@ export abstract class ItemModel implements vscode.Disposable {
   abstract getChildren(): Promise<vscode.TreeItem[] | ItemModel[]>;
 
   protected setDisposableChildren(children: vscode.Disposable[]): void {
+    this.#disposableChildren
+      .filter(child => !children.includes(child))
+      .forEach(child => child.dispose());
     this.#disposableChildren = children;
   }
 

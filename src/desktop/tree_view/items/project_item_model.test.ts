@@ -40,6 +40,20 @@ describe('RepositoryItemModel', () => {
     expect(await a.getTreeItem().label).toBe(customQuery.name);
   });
 
+  it('provides stable distinct IDs for project and query branches across reloads', async () => {
+    const other = new ProjectItemModel(projectInRepository, [customQuery, customQuery]);
+    expect(item.getTreeItem().id).toBeTruthy();
+    expect(other.getTreeItem().id).toBe(item.getTreeItem().id);
+    const queries = await other.getChildren();
+    expect(queries[0].getTreeItem().id).toBeTruthy();
+    expect(queries[1].getTreeItem().id).not.toBe(queries[0].getTreeItem().id);
+  });
+
+  it('reuses query objects so revealing an MR can resolve its loaded ancestors', async () => {
+    const first = await item.getChildren();
+    expect((await item.getChildren())[0]).toBe(first[0]);
+  });
+
   describe('item labeled as a project', () => {
     it('should have project name as a label for non-selected projects', () => {
       const itemModel = new ProjectItemModel(nonSelectedProjectInRepository, [customQuery]);

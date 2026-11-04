@@ -2,7 +2,7 @@ import { createFakePartial } from '../../common/test_utils/create_fake_partial';
 import { ExtensionState } from '../extension_state';
 import { gitExtensionWrapper } from '../git/git_extension_wrapper';
 import { getProjectRepository, GitLabProjectRepository } from '../gitlab/gitlab_project_repository';
-import { gitRepository } from '../test_utils/entities';
+import { gitRepository, projectInRepository } from '../test_utils/entities';
 import { IssuableDataProvider } from './issuable_data_provider';
 import { ItemModel } from './items/item_model';
 
@@ -67,5 +67,34 @@ describe('Issuable Data Provider', () => {
       }),
     );
     expect(await provider.getChildren(undefined)).toHaveLength(1);
+  });
+
+  it('keeps visible project models and suppresses refresh when only an excluded review worktree changes', async () => {
+    let changed: () => void;
+    jest.mocked(getProjectRepository).mockReturnValue(
+      createFakePartial<GitLabProjectRepository>({
+        onProjectChange: jest.fn(callback => {
+          changed = () => callback([]);
+          return { dispose: jest.fn() };
+        }),
+        getSelectedOrDefaultForRepository: jest.fn().mockReturnValue(projectInRepository),
+      }),
+    );
+    provider = new IssuableDataProvider(
+      createFakePartial<ExtensionState>({ isValid: () => true, onDidChangeValid: jest.fn() }),
+      repository => repository.rootFsPath === gitRepository.rootFsPath,
+    );
+    const repositories = [gitRepository];
+    jest
+      .spyOn(gitExtensionWrapper, 'gitRepositories', 'get')
+      .mockImplementation(() => repositories);
+    const listener = jest.fn();
+    provider.onDidChangeTreeData(listener);
+    const [before] = await provider.getChildren(undefined);
+    repositories.push({ ...gitRepository, rootFsPath: '/review/snapshot', dispose: jest.fn() });
+    changed!();
+    const [after] = await provider.getChildren(undefined);
+    expect(listener).not.toHaveBeenCalled();
+    expect(after).toBe(before);
   });
 });

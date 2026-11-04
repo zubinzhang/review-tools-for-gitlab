@@ -35,6 +35,10 @@ export class ReviewWorkspace {
 
   #disposed = false;
 
+  #selectedReview?: string;
+
+  #scheduleCleanup?: () => void;
+
   constructor(
     private readonly storagePath: string,
     private readonly previousStoragePaths: readonly string[] = [],
@@ -63,6 +67,7 @@ export class ReviewWorkspace {
       }, 30000);
     };
     schedule();
+    this.#scheduleCleanup = schedule;
     return vscode.Disposable.from(
       vscode.window.tabGroups.onDidChangeTabs(schedule),
       vscode.window.tabGroups.onDidChangeTabGroups(schedule),
@@ -70,8 +75,14 @@ export class ReviewWorkspace {
       new vscode.Disposable(() => {
         this.#disposed = true;
         clearTimeout(this.#timer);
+        this.#scheduleCleanup = undefined;
       }),
     );
+  }
+
+  setSelectedReview(request: ReviewWorktreeRequest | undefined): void {
+    this.#selectedReview = request ? identityKey(request) : undefined;
+    this.#scheduleCleanup?.();
   }
 
   deduplicate(): Promise<boolean> {
@@ -125,6 +136,7 @@ export class ReviewWorkspace {
 
   #activeResources(): ActiveResources {
     const reviews = new Set<string>();
+    if (this.#selectedReview) reviews.add(this.#selectedReview);
     const physical: vscode.Uri[] = [];
     for (const group of vscode.window.tabGroups?.all ?? []) {
       for (const tab of group.tabs) {

@@ -16,7 +16,7 @@ import { ReviewWorkspace } from './review_workspace';
 export const PREPARE_REVIEW_NAVIGATION = 'gitlab-review.prepareCodeNavigation';
 
 type NavigationIdentity = Pick<ReviewParams, 'repositoryRoot' | 'projectId' | 'mrId' | 'commit'>;
-type NavigationMode = 'implicit' | 'explicit' | 'hover';
+type NavigationMode = 'implicit' | 'explicit' | 'hover' | 'automatic';
 
 interface DefinitionDiff {
   baseFileUri: vscode.Uri;
@@ -342,6 +342,11 @@ export class ReviewNavigation
     await this.#getLocalDocument(document, undefined, 'explicit');
   }
 
+  async prepareReview(request: ReviewWorktreeRequest): Promise<void> {
+    if (!vscode.workspace.isTrusted) return;
+    await this.#getRoot(request, 'automatic');
+  }
+
   async openFile(param?: vscode.Uri | ChangedFileItem): Promise<void> {
     const document = await this.#getSourceDocument(param);
     if (!document) return;
@@ -455,12 +460,11 @@ export class ReviewNavigation
     request: ReviewWorktreeRequest,
     mode: NavigationMode,
   ): Promise<string | undefined> {
-    const explicit = mode === 'explicit';
     const root = this.manager.getPath(request);
     const included = () => this.workspace.isIncluded(root);
     if (mode === 'hover') return included() ? this.manager.getPrepared(request) : undefined;
     if (included()) return this.manager.ensure(request);
-    if (!explicit && this.#declined.has(root)) return undefined;
+    if (mode === 'implicit' && this.#declined.has(root)) return undefined;
     const pending = this.#preparing.get(root);
     if (pending) return pending;
     const preparation = (async () => {
@@ -469,10 +473,13 @@ export class ReviewNavigation
         if (prepared)
           return (await this.workspace.include(prepared, request)) ? prepared : undefined;
       }
-      const choice = await vscode.window.showInformationMessage(
-        `Prepare an isolated worktree for MR !${request.mrIid} (${request.commit.slice(0, 8)}) and add it to this workspace for language analysis? Your current branch and files will not change. Only prepare code you trust: language tools may load project configuration. VS Code may reload extensions the first time; then retry F12.`,
-        'Prepare Review Workspace',
-      );
+      const choice =
+        mode === 'automatic'
+          ? 'Prepare Review Workspace'
+          : await vscode.window.showInformationMessage(
+              `Prepare an isolated worktree for MR !${request.mrIid} (${request.commit.slice(0, 8)}) and add it to this workspace for language analysis? Your current branch and files will not change. Only prepare code you trust: language tools may load project configuration. VS Code may reload extensions the first time; then retry F12.`,
+              'Prepare Review Workspace',
+            );
       if (choice !== 'Prepare Review Workspace') {
         this.#declined.add(root);
         return undefined;

@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { isEqual } from 'lodash';
 import { handleError } from '../../../common/errors/handle_error';
 import { CustomQuery } from '../../../common/gitlab/custom_query';
 import { CustomQueryType } from '../../../common/gitlab/custom_query_type';
 import { ProjectInRepository } from '../../gitlab/new_project';
 import { getGitLabService } from '../../gitlab/get_gitlab_service';
+import { reviewProjectId } from '../review_tree_id';
 import { ErrorItem } from './error_item';
 import { MrItemModel } from './mr_item_model';
 import { ExternalUrlItem } from './external_url_item';
@@ -16,7 +18,13 @@ export class CustomQueryItemModel extends ItemModel {
 
   #customQuery: CustomQuery;
 
-  constructor(customQuery: CustomQuery, projectInRepository: ProjectInRepository) {
+  #mrModels = new Map<number, MrItemModel>();
+
+  constructor(
+    customQuery: CustomQuery,
+    projectInRepository: ProjectInRepository,
+    private readonly treeId = `${reviewProjectId(projectInRepository)}/query:${JSON.stringify(customQuery)}`,
+  ) {
     super();
     this.#projectInRepository = projectInRepository;
     this.#customQuery = customQuery;
@@ -28,6 +36,7 @@ export class CustomQueryItemModel extends ItemModel {
       vscode.TreeItemCollapsibleState.Collapsed,
     );
     item.iconPath = new vscode.ThemeIcon('filter');
+    item.id = this.treeId;
     return item;
   }
 
@@ -44,9 +53,13 @@ export class CustomQueryItemModel extends ItemModel {
     const { MR, ISSUE, SNIPPET, EPIC, VULNERABILITY } = CustomQueryType;
     switch (this.#customQuery.type) {
       case MR: {
-        const mrModels = issues.map(
-          (mr: RestIssuable) => new MrItemModel(mr as RestMr, this.#projectInRepository),
-        );
+        const mrModels = issues.map((mr: RestIssuable) => {
+          const previous = this.#mrModels.get(mr.id);
+          return previous && isEqual(previous.mr, mr)
+            ? previous
+            : new MrItemModel(mr as RestMr, this.#projectInRepository, this.treeId);
+        });
+        this.#mrModels = new Map(mrModels.map(model => [model.mr.id, model]));
         this.setDisposableChildren(mrModels);
         return mrModels;
       }

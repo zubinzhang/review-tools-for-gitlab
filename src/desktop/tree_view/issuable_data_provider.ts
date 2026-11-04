@@ -10,11 +10,21 @@ import { ItemModel } from './items/item_model';
 import { MultipleProjectsItem } from './items/multiple_projects_item';
 import { NoProjectItem } from './items/no_project_item';
 import { ProjectItemModel } from './items/project_item_model';
+import { ChangedFolderItem } from './items/changed_folder_item';
+import { reviewProjectId } from './review_tree_id';
+
+export type ReviewTreeElement = ItemModel | vscode.TreeItem;
 
 export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel | vscode.TreeItem> {
   #eventEmitter = new vscode.EventEmitter<void>();
 
   #children: ItemModel[] = [];
+
+  #roots: ReviewTreeElement[] = [];
+
+  #signature?: string;
+
+  #parents = new WeakMap<ReviewTreeElement, ReviewTreeElement>();
 
   #extensionState: ExtensionState;
 
@@ -27,15 +37,44 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
   ) {
     this.#extensionState = extensionState;
     this.#extensionState.onDidChangeValid(this.refresh, this);
-    getProjectRepository().onProjectChange(this.refresh, this);
+    getProjectRepository().onProjectChange(this.#refreshIfChanged, this);
+    extensionConfigurationService.onChange(this.#refreshIfChanged, this);
     onSidebarViewStateChange(this.refresh, this);
   }
 
-  async getChildren(el: ItemModel | undefined): Promise<(ItemModel | vscode.TreeItem)[]> {
-    if (el) return el.getChildren();
+  async getChildren(el: ReviewTreeElement | undefined): Promise<ReviewTreeElement[]> {
+    if (el) {
+      const children =
+        el instanceof ItemModel || el instanceof ChangedFolderItem ? await el.getChildren() : [];
+      children.forEach(child => this.#parents.set(child, el));
+      return children;
+    }
+    if (!this.#extensionState.isValid()) {
+      this.#children.forEach(child => child.dispose());
+      this.#children = [];
+      this.#roots = [];
+      this.#signature = undefined;
+      return [];
+    }
+    const { descriptors, customQueries, signature } = this.#describe();
+    if (signature === this.#signature) return this.#roots;
+    this.#children.forEach(child => child.dispose());
+    this.#parents = new WeakMap();
+    const children = descriptors.map(({ repository, selected, ambiguous }) => {
+      if (selected) return new ProjectItemModel(selected, customQueries, descriptors.length === 1);
+      const item = ambiguous ? new MultipleProjectsItem(repository) : new NoProjectItem(repository);
+      item.id = `review-repository:${canonicalReviewPath(repository.rootFsPath)}`;
+      return item;
+    });
+    this.#children = children.filter(
+      (child): child is ProjectItemModel => child instanceof ProjectItemModel,
+    );
+    this.#roots = children;
+    this.#signature = signature;
+    return children;
+  }
 
-    this.#children.forEach(ch => ch.dispose());
-    if (!this.#extensionState.isValid()) return []; // show welcome screen
+  #describe() {
     const { customQueries } = extensionConfigurationService.getConfiguration();
     const seen = new Set<string>();
     const repositories = gitExtensionWrapper.gitRepositories
@@ -46,23 +85,42 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
         seen.add(root);
         return true;
       });
-    const children = repositories.map(r => {
-      const selected = getProjectRepository().getSelectedOrDefaultForRepository(r.rootFsPath);
-      if (selected) {
-        const shouldExpandItem = repositories.length === 1;
-        return new ProjectItemModel(selected, customQueries, shouldExpandItem);
-      }
-      if (getProjectRepository().repositoryHasAmbiguousProjects(r.rootFsPath)) {
-        return new MultipleProjectsItem(r);
-      }
-      return new NoProjectItem(r);
+    const descriptors = repositories.map(repository => {
+      const selected = getProjectRepository().getSelectedOrDefaultForRepository(
+        repository.rootFsPath,
+      );
+      return {
+        repository,
+        selected,
+        ambiguous:
+          !selected && getProjectRepository().repositoryHasAmbiguousProjects(repository.rootFsPath),
+      };
     });
-    this.#children = children.filter((c): c is ProjectItemModel => c instanceof ProjectItemModel);
-    return children;
+    const signature = JSON.stringify([
+      customQueries,
+      descriptors.map(({ repository, selected, ambiguous }) =>
+        selected
+          ? [reviewProjectId(selected), selected.project, selected.initializationType]
+          : [canonicalReviewPath(repository.rootFsPath), ambiguous],
+      ),
+    ]);
+    return { descriptors, customQueries, signature };
   }
 
-  getParent(): null {
-    return null;
+  getParent(item?: ReviewTreeElement): ReviewTreeElement | null {
+    return item ? (this.#parents.get(item) ?? null) : null;
+  }
+
+  getElementPath(item: ReviewTreeElement): string[] | undefined {
+    const ids: string[] = [];
+    let current: ReviewTreeElement | null = item;
+    while (current) {
+      const { id } = this.getTreeItem(current);
+      if (!id) return undefined;
+      ids.unshift(id);
+      current = this.getParent(current);
+    }
+    return ids;
   }
 
   getTreeItem(item: vscode.TreeItem | ItemModel) {
@@ -71,6 +129,11 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
   }
 
   refresh(): void {
+    this.#signature = undefined;
     this.#eventEmitter.fire();
   }
+
+  #refreshIfChanged = (): void => {
+    if (this.#describe().signature !== this.#signature) this.refresh();
+  };
 }

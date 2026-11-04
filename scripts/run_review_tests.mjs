@@ -4,6 +4,19 @@ import fs from 'node:fs/promises';
 import { runTests } from 'vscode-test';
 import { root } from './utils/run_utils.mjs';
 
+const manifestPath = path.join(root, 'dist-desktop/package.json');
+const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+if (
+  !manifest.contributes.views['gitlab-review'].some(
+    view => view.id === 'gitlabReview.testPreparation',
+  )
+)
+  manifest.contributes.views['gitlab-review'].push({
+    id: 'gitlabReview.testPreparation',
+    name: 'Review Preparation Test',
+  });
+await fs.writeFile(manifestPath, JSON.stringify(manifest));
+
 const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gitlab-review-tests-'));
 const workspaceFile = path.join(userDataDir, 'review-tests.code-workspace');
 await fs.writeFile(

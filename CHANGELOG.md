@@ -3,6 +3,28 @@
 Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
 for provenance; upstream entries do not describe features enabled in this review-only fork.
 
+## [1.0.2](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.2) — 2026-11-04
+
+### Added
+
+- Automatically prepare or reuse the exact-commit review worktree when selecting or expanding an
+  MR in a trusted workspace, without waiting for the first F12 request or asking for preparation.
+- Save the selected MR before workspace changes and restore it after an extension-host restart,
+  provided it is still available in the same project/query.
+
+### Fixed
+
+- Suppress MR-tree refreshes when only excluded worktree repositories change.
+- Give project, query, and MR nodes stable identities and retain unchanged model instances so
+  worktree preparation does not collapse the tree or lose the selected MR.
+- Share an in-flight MR diff-version request between automatic preparation and file expansion.
+- Ignore outdated preparation requests when switching MRs quickly.
+- Keep the selected MR's worktree attached before a diff opens; release it when selecting another
+  branch, collapsing the MR, or hiding the sidebar, subject to the existing open-file protections.
+
+VS Code may still reload extensions on the first single-folder to multi-root workspace conversion;
+selection restoration handles this transition rather than preventing the native reload.
+
 ## [1.0.1](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.1) — 2026-11-04
 
 ### Fixed

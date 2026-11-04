@@ -36,7 +36,7 @@ import {
   selectProjectForRepository,
 } from './gitlab/select_project';
 import { ExtensionState, setExtensionStateSingleton } from './extension_state';
-import { IssuableDataProvider } from './tree_view/issuable_data_provider';
+import { IssuableDataProvider, ReviewTreeElement } from './tree_view/issuable_data_provider';
 import { setupViewedCheckboxes } from './tree_view/viewed_checkbox_handler';
 import { setSidebarViewState, SidebarViewState } from './tree_view/sidebar_view_state';
 import { issuableController } from './issuable_controller';
@@ -58,6 +58,7 @@ import { GitExtension } from './api/git';
 import { ReviewWorktreeManager } from './review/review_worktree';
 import { ReviewWorkspace } from './review/review_workspace';
 import { ReviewCacheCleanup } from './review/review_cache_cleanup';
+import { ReviewTreeController } from './review/review_tree_controller';
 import { ReviewNavigation, PREPARE_REVIEW_NAVIGATION } from './review/review_navigation';
 import {
   toggleResolved,
@@ -108,7 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
     state,
     repository => !reviewWorkspace.isReviewRoot(repository.rootFsPath),
   );
-  const tree = vscode.window.createTreeView('gitlabReview.mergeRequests', {
+  const tree = vscode.window.createTreeView<ReviewTreeElement>('gitlabReview.mergeRequests', {
     treeDataProvider: provider,
   });
   context.subscriptions.push(
@@ -140,7 +141,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const cleanup = new ReviewCacheCleanup(worktrees, reviewWorkspace);
   cleanup.run().catch(handleError);
   const navigation = new ReviewNavigation(worktrees, undefined, undefined, reviewWorkspace);
+  const reviewTree = new ReviewTreeController(
+    tree,
+    provider,
+    navigation,
+    reviewWorkspace,
+    context.globalState,
+  );
   context.subscriptions.push(
+    reviewTree.listen(),
     tree.onDidChangeVisibility(event => {
       if (event.visible) cleanup.run().catch(handleError);
     }),
@@ -216,4 +225,5 @@ export async function activate(context: vscode.ExtensionContext) {
   await gitExtensionWrapper.init();
   await projects.init();
   await validateAccounts(true).catch(handleError);
+  await reviewTree.restore().catch(handleError);
 }

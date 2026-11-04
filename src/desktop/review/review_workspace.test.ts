@@ -187,6 +187,17 @@ describe('ReviewWorkspace', () => {
     expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
   });
 
+  it('retains the selected MR before any diff tab opens and releases it after selection changes', async () => {
+    const current = await snapshot(storage);
+    folders.push(folder(current, 1));
+    workspace.setSelectedReview(identity);
+    await workspace.removeInactive();
+    expect(folders).toHaveLength(2);
+    workspace.setSelectedReview(undefined);
+    await workspace.removeInactive();
+    expect(folders).toHaveLength(1);
+  });
+
   it('automatically detaches closed reviews after a grace period, retaining open reviews and disk files', async () => {
     const current = await snapshot(storage);
     const other = await snapshot(legacy, 'c'.repeat(40));

@@ -12,6 +12,7 @@ async function run() {
   mocha.addFile(path.join(testsRoot, 'mr_review.test.js'));
   mocha.addFile(path.join(testsRoot, 'issuable_webview.test.js'));
   mocha.addFile(path.join(__dirname, 'navigation.test.js'));
+  mocha.addFile(path.join(__dirname, 'tree_preparation.test.js'));
   await new Promise((resolve, reject) => {
     mocha.run(failures =>
       failures ? reject(new Error(`${failures} Review tests failed`)) : resolve(),

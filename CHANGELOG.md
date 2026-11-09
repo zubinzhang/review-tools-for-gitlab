@@ -3,6 +3,18 @@
 Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
 for provenance; upstream entries do not describe features enabled in this review-only fork.
 
+## [1.0.4](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.4) — 2026-11-09
+
+### Changed
+
+- Make **Commits** a selection list with **All commits** and individual commit entries. Selecting
+  an entry updates the single MR file tree instead of showing a second file list under each commit.
+- Preserve directory/list layouts, show the active selection, and refresh only the selected MR.
+- Keep comments and viewed-file state when switching back to **All commits**. Individual commit
+  diffs remain read-only comparisons against their first parent.
+- Reuse the loaded commit list, combine commit diff pages without duplicate files, and ignore
+  outdated results when switching selections quickly. Failed selections can be retried.
+
 ## [1.0.3](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.3) — 2026-11-09
 
 ### Added

@@ -5,6 +5,8 @@ const { graphql, HttpResponse } = require('msw');
 
 const { IssuableDataProvider } = require('../../src/desktop/tree_view/issuable_data_provider');
 const { MrItemModel } = require('../../src/desktop/tree_view/items/mr_item_model');
+const { ChangedFileItem } = require('../../src/desktop/tree_view/items/changed_file_item');
+const { viewedFilesStore } = require('../../src/desktop/review/viewed_files_store');
 const { submitEdit, createComment } = require('../../src/desktop/commands/mr_discussion_commands');
 const { toReviewUri, fromReviewUri } = require('../../src/desktop/review/review_uri');
 const { CommentingRangeProvider } = require('../../src/desktop/review/commenting_range_provider');
@@ -127,74 +129,130 @@ describe('MR Review', () => {
     );
   });
 
-  it('browses MR commits and opens an exact first-parent diff inside VS Code', async () => {
-    const commit = {
-      id: versionResponse.head_commit_sha,
-      parent_ids: ['d'.repeat(40)],
-      title: 'Change a helper',
-      message: 'Change a helper\n\nCommit details',
-      author_name: 'Reviewer',
-      committed_date: '2026-11-09T04:00:00Z',
-    };
-    server.use(
-      createQueryJsonEndpoint('/projects/278964/merge_requests/33824/commits', {
-        '?page=1&per_page=100': [commit],
-      }),
-      createQueryJsonEndpoint(`/projects/278964/repository/commits/${commit.id}/diff`, {
-        '?page=1&per_page=100': [
-          {
-            old_path: 'src/test.js',
-            new_path: 'src/test.js',
-            new_file: false,
-            deleted_file: false,
-            renamed_file: false,
-            diff: '@@ -1 +1 @@\n-parent\n+head\n',
-          },
-        ],
-      }),
-      createQueryJsonEndpoint('/projects/278964/repository/files/src%2Ftest.js', {
-        [`?ref=${commit.id}`]: { size: 11 },
-        [`?ref=${commit.parent_ids[0]}`]: { size: 13 },
-      }),
-      createQueryTextEndpoint('/projects/278964/repository/files/src%2Ftest.js/raw', {
-        [`?ref=${commit.id}`]: 'Commit head',
-        [`?ref=${commit.parent_ids[0]}`]: 'Commit parent',
-      }),
-    );
-    const content = await dataProvider.getChildren(mrItemModel);
-    const commits = content.find(child => getTreeItem(child).label === 'Commits');
-    const [commitItem] = await dataProvider.getChildren(commits);
-    assert.strictEqual(getTreeItem(commitItem).label, commit.title);
-    assert.strictEqual(dataProvider.getParent(commitItem), commits);
-    const [link, changed] = await dataProvider.getChildren(commitItem);
-    assert.strictEqual(link.command.command, 'gitlab-review.openCommitInGitLab');
-    assert.strictEqual(dataProvider.getParent(changed), commitItem);
-    const [original, modified] = changed.command.arguments;
-    assert.strictEqual(fromReviewUri(original).commit, commit.parent_ids[0]);
-    assert.strictEqual(fromReviewUri(modified).commit, commit.id);
-    assert.strictEqual(fromReviewUri(modified).comparison, 'commit');
-    await vscode.commands.executeCommand(changed.command.command, ...changed.command.arguments);
-    try {
-      const { input } = vscode.window.tabGroups.activeTabGroup.activeTab;
-      assert.ok(input instanceof vscode.TabInputTextDiff);
-      assert.strictEqual(input.original.toString(), original.toString());
-      assert.strictEqual(input.modified.toString(), modified.toString());
+  [SidebarViewState.ListView, SidebarViewState.TreeView].forEach(viewState => {
+    it(`filters the single MR file tree by commit in ${viewState} and restores all commits`, async () => {
+      await setSidebarViewState(viewState);
+      const commit = {
+        id: versionResponse.head_commit_sha,
+        parent_ids: ['d'.repeat(40)],
+        title: 'Change a helper',
+        message: 'Change a helper\n\nCommit details',
+        author_name: 'Reviewer',
+        committed_date: '2026-11-09T04:00:00Z',
+      };
+      server.use(
+        createQueryJsonEndpoint('/projects/278964/merge_requests/33824/commits', {
+          '?page=1&per_page=100': [commit],
+        }),
+        createQueryJsonEndpoint(`/projects/278964/repository/commits/${commit.id}/diff`, {
+          '?page=1&per_page=100': [
+            {
+              old_path: 'src/test.js',
+              new_path: 'src/test.js',
+              new_file: false,
+              deleted_file: false,
+              renamed_file: false,
+              diff: '@@ -1 +1 @@\n-parent\n+head\n',
+            },
+          ],
+        }),
+        createQueryJsonEndpoint('/projects/278964/repository/files/src%2Ftest.js', {
+          [`?ref=${commit.id}`]: { size: 11 },
+          [`?ref=${commit.parent_ids[0]}`]: { size: 13 },
+        }),
+        createQueryTextEndpoint('/projects/278964/repository/files/src%2Ftest.js/raw', {
+          [`?ref=${commit.id}`]: 'Commit head',
+          [`?ref=${commit.parent_ids[0]}`]: 'Commit parent',
+        }),
+      );
+      const content = await dataProvider.getChildren(mrItemModel);
+      const getFiles = async children => {
+        const groups = await Promise.all(
+          children.map(async child => {
+            if (
+              child instanceof ChangedFileItem ||
+              getTreeItem(child).contextValue === 'commit-file-item'
+            )
+              return [child];
+            if (
+              child instanceof vscode.TreeItem &&
+              child.collapsibleState === vscode.TreeItemCollapsibleState.Expanded
+            ) {
+              return getFiles(await dataProvider.getChildren(child));
+            }
+            return [];
+          }),
+        );
+        return groups.flat();
+      };
+      const allFiles = await getFiles(content);
+      const { mrKey, fileId, contentHash } = allFiles[0].viewedState;
+      await viewedFilesStore.setViewed(mrKey, fileId, contentHash);
+      const commits = content.find(child => getTreeItem(child).label === 'Commits');
+      const [all, commitItem] = await dataProvider.getChildren(commits);
+      assert.strictEqual(getTreeItem(all).label, 'All commits');
+      assert.strictEqual(getTreeItem(commitItem).label, commit.title);
+      assert.strictEqual(dataProvider.getParent(commitItem), commits);
       assert.strictEqual(
-        (await vscode.workspace.openTextDocument(original)).getText(),
-        'Commit parent',
+        getTreeItem(commitItem).collapsibleState,
+        vscode.TreeItemCollapsibleState.None,
       );
-      const document = await vscode.workspace.openTextDocument(modified);
-      assert.strictEqual(document.getText(), 'Commit head');
-      assert.deepStrictEqual(
-        new CommentingRangeProvider(
-          openMergeRequestResponse,
-          versionResponse,
-        ).provideCommentingRanges(document),
-        [],
-      );
-    } finally {
-      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-    }
+      assert.deepStrictEqual(await dataProvider.getChildren(commitItem), []);
+      const changes = [];
+      const subscription = dataProvider.onDidChangeTreeData(element => changes.push(element));
+      const choose = getTreeItem(commitItem).command;
+      await vscode.commands.executeCommand(choose.command, ...choose.arguments);
+      assert.deepStrictEqual(changes, [mrItemModel]);
+      const selectedContent = await dataProvider.getChildren(mrItemModel);
+      assert.strictEqual(selectedContent[1], commits);
+      assert.strictEqual(getTreeItem(commitItem).iconPath.id, 'check');
+      assert.strictEqual(getTreeItem(commits).description, commit.id.slice(0, 8));
+      const link = selectedContent[2];
+      const files = await getFiles(selectedContent);
+      assert.strictEqual(files.length, 1);
+      assert.ok(selectedContent.every(child => !(child instanceof ChangedFileItem)));
+      const [changed] = files;
+      assert.strictEqual(changed.checkboxState, undefined);
+      assert.strictEqual(link.command.command, 'gitlab-review.openCommitInGitLab');
+      const [original, modified] = changed.command.arguments;
+      assert.strictEqual(fromReviewUri(original).commit, commit.parent_ids[0]);
+      assert.strictEqual(fromReviewUri(modified).commit, commit.id);
+      assert.strictEqual(fromReviewUri(modified).comparison, 'commit');
+      await vscode.commands.executeCommand(changed.command.command, ...changed.command.arguments);
+      try {
+        const { input } = vscode.window.tabGroups.activeTabGroup.activeTab;
+        assert.ok(input instanceof vscode.TabInputTextDiff);
+        assert.strictEqual(input.original.toString(), original.toString());
+        assert.strictEqual(input.modified.toString(), modified.toString());
+        assert.strictEqual(
+          (await vscode.workspace.openTextDocument(original)).getText(),
+          'Commit parent',
+        );
+        const document = await vscode.workspace.openTextDocument(modified);
+        assert.strictEqual(document.getText(), 'Commit head');
+        assert.deepStrictEqual(
+          new CommentingRangeProvider(
+            openMergeRequestResponse,
+            versionResponse,
+          ).provideCommentingRanges(document),
+          [],
+        );
+      } finally {
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+        const reset = getTreeItem(all).command;
+        await vscode.commands.executeCommand(reset.command, ...reset.arguments);
+        subscription.dispose();
+        assert.deepStrictEqual(changes, [mrItemModel, mrItemModel]);
+        const restored = await getFiles(await dataProvider.getChildren(mrItemModel));
+        assert.deepStrictEqual(
+          restored.map(file => file.resourceUri.toString()),
+          allFiles.map(file => file.resourceUri.toString()),
+        );
+        assert.strictEqual(restored[0].checkboxState, vscode.TreeItemCheckboxState.Checked);
+        assert.strictEqual(getTreeItem(all).iconPath.id, 'check');
+        await viewedFilesStore.setNotViewed(mrKey, fileId);
+      }
+    });
   });
 
   describe('discussions', () => {

@@ -85,6 +85,7 @@ export const USER_COMMANDS = {
   User can't trigger these commands directly. We use them from within the code.
 */
 export const PROGRAMMATIC_COMMANDS = {
+  SELECT_REVIEW_COMMIT: 'gitlab-review.selectReviewCommit',
   SHOW_RICH_CONTENT: 'gitlab-review.showRichContent',
   SHOW_ERROR_MESSAGE: 'gl.showErrorMessage',
 };

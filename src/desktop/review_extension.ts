@@ -59,6 +59,7 @@ import { ReviewWorktreeManager } from './review/review_worktree';
 import { ReviewWorkspace } from './review/review_workspace';
 import { ReviewCacheCleanup } from './review/review_cache_cleanup';
 import { ReviewTreeController } from './review/review_tree_controller';
+import { MrCommitItem } from './tree_view/items/mr_commit_item';
 import { ReviewNavigation, PREPARE_REVIEW_NAVIGATION } from './review/review_navigation';
 import {
   toggleResolved,
@@ -160,6 +161,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const commands = {
+    [PROGRAMMATIC_COMMANDS.SELECT_REVIEW_COMMIT]: (item: MrCommitItem) => item.select(),
     [PREPARE_REVIEW_NAVIGATION]: navigation.prepare.bind(navigation),
     [USER_COMMANDS.AUTHENTICATE]: async (previousInstanceUrl?: string) => {
       const instanceUrl =

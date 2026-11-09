@@ -2,9 +2,10 @@ import { createFakePartial } from '../../common/test_utils/create_fake_partial';
 import { ExtensionState } from '../extension_state';
 import { gitExtensionWrapper } from '../git/git_extension_wrapper';
 import { getProjectRepository, GitLabProjectRepository } from '../gitlab/gitlab_project_repository';
-import { gitRepository, projectInRepository } from '../test_utils/entities';
+import { gitRepository, projectInRepository, mr } from '../test_utils/entities';
 import { IssuableDataProvider } from './issuable_data_provider';
 import { ItemModel } from './items/item_model';
+import { MrItemModel } from './items/mr_item_model';
 
 jest.mock('../gitlab/gitlab_project_repository');
 
@@ -24,6 +25,19 @@ describe('Issuable Data Provider', () => {
   it('returns empty array when there are no repositories', async () => {
     jest.spyOn(gitExtensionWrapper, 'gitRepositories', 'get').mockReturnValue([]);
     expect(await provider.getChildren(undefined)).toEqual([]);
+  });
+
+  it('refreshes only the selected MR and subscribes once across repeated expansions', async () => {
+    const item = new MrItemModel(mr, projectInRepository);
+    jest.spyOn(item, 'getChildren').mockResolvedValue([]);
+    const listener = jest.fn();
+    provider.onDidChangeTreeData(listener);
+    await provider.getChildren(item);
+    await provider.getChildren(item);
+    item.selectCommit(undefined);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(item);
+    item.dispose();
   });
 
   it('can exclude review snapshots so adding one does not duplicate the MR project tree', async () => {

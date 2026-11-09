@@ -1,8 +1,7 @@
 import { posix as path } from 'path';
 import { ThemeIcon, TreeItem, TreeItemCollapsibleState, Uri } from 'vscode';
-import { ChangedFileItem } from './changed_file_item';
 
-export type FolderTreeItem = { path: string; item: ChangedFileItem };
+export type FolderTreeItem = { path: string; item: TreeItem };
 
 const isFolderItem = (p: FolderTreeItem) => p.path.includes(path.sep);
 const isFileItem = (p: FolderTreeItem) => !isFolderItem(p);

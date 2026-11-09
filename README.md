@@ -38,16 +38,22 @@ Git remotes using SSH are supported; the API URL comes from the authenticated ac
 
 ## Commit History
 
-Expand an MR, then **Commits**, to see its current commits with title, short SHA, author, and
-timestamp. Hover over a commit for the full SHA and message. Expand a commit and select a changed
-file to open its diff in VS Code. The left side is the first parent, and the right side is the
-selected commit; an initial commit has an empty left side. Added, deleted, and renamed paths are
-handled at those exact revisions. **Open commit in GitLab** opens the commit's web page.
+Expand an MR, then **Commits**, to choose **All commits** (the default) or one commit. The group
+contains only these choices, with title, short SHA, author, and timestamp. Hover for the full SHA
+and message. A check mark identifies the selected choice, which updates the single file tree below
+the group. Both directory and list layouts are supported.
 
-Commit lists and changed files load only when expanded, in pages of 100. Expand **More commits…**
-or **More files…** to continue. Collapse and expand to reload or retry. GitLab may limit large diffs;
+**All commits** shows the entire MR diff. Selecting one commit shows only that commit's changed
+files. Open a file to compare its first parent on the left with the selected commit on the right;
+an initial commit has an empty left side. Added, deleted, and renamed paths use their exact
+revisions. **Open commit in GitLab** opens the selected commit's web page.
+
+The commit list loads when expanded, in pages of 100; expand **More commits…** to continue.
+Changed files load only after selecting a commit, combining all returned pages into one file tree.
+Selections reuse the loaded commit list and refresh only the current MR. After a rebase or force
+push, use the sidebar refresh action to reload the list. Retry failed loads by collapsing and
+expanding the Commits group or selecting the failed commit again. GitLab may limit large diffs;
 binary files or omitted diff details are indicated, and the GitLab link remains available.
-The commit list reflects current server membership, so refresh it after a rebase or force push.
 
 Individual commit comparisons are read-only browsing views. MR comments, viewed-file checkboxes,
 and worktree-backed semantic navigation/hover remain available in the overall MR diff. They are

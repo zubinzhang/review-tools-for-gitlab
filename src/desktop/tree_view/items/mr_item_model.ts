@@ -28,6 +28,8 @@ import { ChangedFolderItem, FolderTreeItem } from './changed_folder_item';
 import { ItemModel } from './item_model';
 import { ChangedFileItem, HasCommentsFn, getChangeType } from './changed_file_item';
 import { MrCommitsItem } from './mr_commits_item';
+import { ReviewCommit } from './mr_commit_item';
+import { CommitChangesItem } from './commit_changes_item';
 
 const isTextDiffDiscussion = (discussion: GqlDiscussion): discussion is GqlTextDiffDiscussion => {
   const firstNote = discussion.notes.nodes[0];
@@ -90,6 +92,16 @@ export class MrItemModel extends ItemModel {
 
   #commits: MrCommitsItem;
 
+  #selectedCommit?: ReviewCommit;
+
+  #selectedChanges?: CommitChangesItem;
+
+  #allChildrenLoad?: Promise<(vscode.TreeItem | ItemModel)[]>;
+
+  #changeEmitter = new vscode.EventEmitter<void>();
+
+  readonly onDidChange = this.#changeEmitter.event;
+
   readonly mr: RestMr;
 
   readonly projectInRepository: ProjectInRepository;
@@ -102,7 +114,11 @@ export class MrItemModel extends ItemModel {
     super();
     this.mr = mr;
     this.projectInRepository = projectInRepository;
-    this.#commits = new MrCommitsItem(mr, projectInRepository, `${this.parentId}/mr/${mr.id}`);
+    this.#commits = new MrCommitsItem(mr, projectInRepository, `${this.parentId}/mr/${mr.id}`, {
+      getSelected: () => this.#selectedCommit,
+      select: commit => this.selectCommit(commit),
+    });
+    this.setDisposableChildren([this.#commits]);
   }
 
   getTreeItem(): vscode.TreeItem {
@@ -152,6 +168,41 @@ export class MrItemModel extends ItemModel {
   }
 
   async getChildren(): Promise<(vscode.TreeItem | ItemModel)[]> {
+    const selected = this.#selectedChanges;
+    const children = selected
+      ? [this.#overviewItem, this.#commits, ...(await selected.getChildren())]
+      : await this.#getAllChildren();
+    return selected === this.#selectedChanges ? children : this.getChildren();
+  }
+
+  selectCommit(commit: ReviewCommit | undefined): void {
+    if (this.#selectedCommit?.id !== commit?.id) {
+      this.#selectedCommit = commit;
+      this.#selectedChanges = commit
+        ? new CommitChangesItem(
+            commit,
+            this.mr,
+            this.projectInRepository,
+            `${this.parentId}/mr/${this.mr.id}`,
+          )
+        : undefined;
+    }
+    this.#changeEmitter.fire();
+  }
+
+  dispose(): void {
+    super.dispose();
+    this.#changeEmitter.dispose();
+  }
+
+  #getAllChildren(): Promise<(vscode.TreeItem | ItemModel)[]> {
+    this.#allChildrenLoad ??= this.#loadAllChildren().finally(() => {
+      this.#allChildrenLoad = undefined;
+    });
+    return this.#allChildrenLoad;
+  }
+
+  async #loadAllChildren(): Promise<(vscode.TreeItem | ItemModel)[]> {
     try {
       const mrVersion = await this.getReviewVersion();
 

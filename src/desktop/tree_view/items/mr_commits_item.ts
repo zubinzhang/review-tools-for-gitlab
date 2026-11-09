@@ -4,17 +4,20 @@ import { getGitLabService } from '../../gitlab/get_gitlab_service';
 import { ProjectInRepository } from '../../gitlab/new_project';
 import { ErrorItem } from './error_item';
 import { ItemModel } from './item_model';
-import { MrCommitItem, ReviewCommit } from './mr_commit_item';
+import { MrCommitItem, ReviewCommit, CommitSelection } from './mr_commit_item';
 
 const pageSize = 100;
 
 export class MrCommitsItem extends ItemModel {
   #pending?: Promise<(ItemModel | vscode.TreeItem)[]>;
 
+  #children?: (ItemModel | vscode.TreeItem)[];
+
   constructor(
     private readonly mr: RestMr,
     private readonly project: ProjectInRepository,
     private readonly parentId: string,
+    private readonly selection: CommitSelection,
     private readonly page = 1,
   ) {
     super();
@@ -27,8 +30,8 @@ export class MrCommitsItem extends ItemModel {
     );
     item.id = this.#id;
     item.iconPath = new vscode.ThemeIcon('git-commit');
-    item.tooltip =
-      'Commits currently in this merge request. Expand a commit to compare it with its first parent.';
+    item.description = this.selection.getSelected()?.id.slice(0, 8) ?? 'All commits';
+    item.tooltip = 'Select All commits or one commit to update the MR file tree below.';
     return item;
   }
 
@@ -37,6 +40,7 @@ export class MrCommitsItem extends ItemModel {
   }
 
   getChildren(): Promise<(ItemModel | vscode.TreeItem)[]> {
+    if (this.#children) return Promise.resolve(this.#children);
     this.#pending ??= this.#load().finally(() => {
       this.#pending = undefined;
     });
@@ -44,6 +48,7 @@ export class MrCommitsItem extends ItemModel {
   }
 
   async #load(): Promise<(ItemModel | vscode.TreeItem)[]> {
+    const all = this.page === 1 ? [new MrCommitItem(undefined, this.#id, this.selection)] : [];
     try {
       const commits = await getGitLabService(this.project).fetchFromApi<ReviewCommit[]>({
         type: 'rest',
@@ -51,18 +56,22 @@ export class MrCommitsItem extends ItemModel {
         path: `/projects/${this.mr.project_id}/merge_requests/${this.mr.iid}/commits`,
         searchParams: { page: String(this.page), per_page: String(pageSize) },
       });
-      if (!commits.length)
-        return [new vscode.TreeItem(this.page === 1 ? 'No commits found.' : 'No more commits.')];
-      const children: ItemModel[] = commits.map(
-        commit => new MrCommitItem(commit, this.mr, this.project, this.#id),
-      );
+      const children: ItemModel[] = [
+        ...all,
+        ...commits.map(commit => new MrCommitItem(commit, this.#id, this.selection)),
+      ];
       if (commits.length === pageSize)
-        children.push(new MrCommitsItem(this.mr, this.project, this.parentId, this.page + 1));
+        children.push(
+          new MrCommitsItem(this.mr, this.project, this.parentId, this.selection, this.page + 1),
+        );
       this.setDisposableChildren(children);
-      return children;
+      this.#children = commits.length
+        ? children
+        : [...all, new vscode.TreeItem(this.page === 1 ? 'No commits found.' : 'No more commits.')];
+      return this.#children;
     } catch (error) {
       log.error('Failed to load MR commits.', error);
-      return [new ErrorItem('Could not load commits. Collapse and expand to retry.')];
+      return [...all, new ErrorItem('Could not load commits. Collapse and expand to retry.')];
     }
   }
 }

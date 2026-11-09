@@ -12,11 +12,16 @@ import { NoProjectItem } from './items/no_project_item';
 import { ProjectItemModel } from './items/project_item_model';
 import { ChangedFolderItem } from './items/changed_folder_item';
 import { reviewProjectId } from './review_tree_id';
+import { MrItemModel } from './items/mr_item_model';
 
 export type ReviewTreeElement = ItemModel | vscode.TreeItem;
 
 export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel | vscode.TreeItem> {
-  #eventEmitter = new vscode.EventEmitter<void>();
+  #eventEmitter = new vscode.EventEmitter<ReviewTreeElement | undefined>();
+
+  #watchedMrs = new WeakSet<MrItemModel>();
+
+  #mrSubscriptions: vscode.Disposable[] = [];
 
   #children: ItemModel[] = [];
 
@@ -44,6 +49,10 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
 
   async getChildren(el: ReviewTreeElement | undefined): Promise<ReviewTreeElement[]> {
     if (el) {
+      if (el instanceof MrItemModel && !this.#watchedMrs.has(el)) {
+        this.#watchedMrs.add(el);
+        this.#mrSubscriptions.push(el.onDidChange(() => this.#eventEmitter.fire(el)));
+      }
       const children =
         el instanceof ItemModel || el instanceof ChangedFolderItem ? await el.getChildren() : [];
       children.forEach(child => this.#parents.set(child, el));
@@ -54,11 +63,13 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
       this.#children = [];
       this.#roots = [];
       this.#signature = undefined;
+      this.#clearMrSubscriptions();
       return [];
     }
     const { descriptors, customQueries, signature } = this.#describe();
     if (signature === this.#signature) return this.#roots;
     this.#children.forEach(child => child.dispose());
+    this.#clearMrSubscriptions();
     this.#parents = new WeakMap();
     const children = descriptors.map(({ repository, selected, ambiguous }) => {
       if (selected) return new ProjectItemModel(selected, customQueries, descriptors.length === 1);
@@ -130,7 +141,13 @@ export class IssuableDataProvider implements vscode.TreeDataProvider<ItemModel |
 
   refresh(): void {
     this.#signature = undefined;
-    this.#eventEmitter.fire();
+    this.#eventEmitter.fire(undefined);
+  }
+
+  #clearMrSubscriptions(): void {
+    this.#mrSubscriptions.forEach(subscription => subscription.dispose());
+    this.#mrSubscriptions = [];
+    this.#watchedMrs = new WeakSet();
   }
 
   #refreshIfChanged = (): void => {

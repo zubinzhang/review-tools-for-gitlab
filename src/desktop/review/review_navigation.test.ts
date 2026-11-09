@@ -113,6 +113,14 @@ describe('ReviewNavigation', () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
 
+  it('does not resolve a historical commit comparison using the MR head workspace', async () => {
+    document = { ...document, uri: toReviewUri({ ...params, comparison: 'commit' }) };
+    expect(await navigation.provideDefinition(document, position, token)).toBeUndefined();
+    expect(await navigation.provideHover(document, position, token)).toBeUndefined();
+    expect(manager.ensure).not.toHaveBeenCalled();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
   describe('hover documentation', () => {
     const range = new vscode.Range(1, 0, 1, 5);
     let local: vscode.TextDocument;

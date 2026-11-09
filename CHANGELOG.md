@@ -3,6 +3,26 @@
 Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
 for provenance; upstream entries do not describe features enabled in this review-only fork.
 
+## [1.0.3](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.3) — 2026-11-09
+
+### Added
+
+- Add a lazy-loaded **Commits** group beneath each MR, showing title, short SHA, author, timestamp,
+  and full commit message on hover.
+- Expand a commit to browse its changed files and open a native side-by-side diff against its first
+  parent. Initial commits compare against an empty document; additions, deletions, and renames use
+  exact commit paths and revisions.
+- Page commit lists and changed files in batches of 100, with retryable errors and a GitLab link.
+
+### Review Behavior
+
+- Keep single-commit comparisons distinct from the whole-MR diff. They do not post MR comments,
+  update MR viewed-file checkboxes, or navigate against the current MR head worktree.
+- Keep the Commits entry available when loading the overall MR diff fails. No commit API request
+  is made until the Commits group is expanded.
+- The commit list reflects the MR's current server state; GitLab's diff limits may omit files or
+  details. Refresh after rebasing or force-pushing, and use the GitLab link for omitted details.
+
 ## [1.0.2](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.2) — 2026-11-04
 
 ### Added

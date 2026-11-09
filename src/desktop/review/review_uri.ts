@@ -14,6 +14,7 @@ export interface ReviewParams {
   mrId: number;
   changeType: ChangeType;
   side?: 'head' | 'base';
+  comparison?: 'commit';
 }
 
 export function toReviewUri({
@@ -25,6 +26,7 @@ export function toReviewUri({
   mrId,
   changeType,
   side,
+  comparison,
 }: ReviewParams): Uri {
   const query = {
     commit,
@@ -34,6 +36,7 @@ export function toReviewUri({
     mrId,
     changeType,
     side,
+    comparison,
   };
   return Uri.file(path).with({
     scheme: REVIEW_URI_SCHEME,
@@ -42,9 +45,8 @@ export function toReviewUri({
 }
 
 export function fromReviewUri(uri: Uri): ReviewParams {
-  const { commit, exists, repositoryRoot, projectId, mrId, changeType, side } = JSON.parse(
-    uri.query,
-  );
+  const { commit, exists, repositoryRoot, projectId, mrId, changeType, side, comparison } =
+    JSON.parse(uri.query);
   return {
     path: uri.path,
     exists: Boolean(exists),
@@ -54,6 +56,7 @@ export function fromReviewUri(uri: Uri): ReviewParams {
     mrId,
     changeType,
     ...(side ? { side } : {}),
+    ...(comparison ? { comparison } : {}),
   };
 }
 

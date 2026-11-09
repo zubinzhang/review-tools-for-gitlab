@@ -23,6 +23,7 @@ export class CommentingRangeProvider implements vscode.CommentingRangeProvider {
     if (uri.scheme !== REVIEW_URI_SCHEME) return [];
     const params = fromReviewUri(uri);
     if (
+      params.comparison === 'commit' ||
       params.mrId !== this.#mr.id ||
       params.projectId !== this.#mr.project_id ||
       !params.path ||

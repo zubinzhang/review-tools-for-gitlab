@@ -19,6 +19,7 @@ See the [changelog](CHANGELOG.md) for release history and upgrade notes.
 - Create and reply to inline discussions; edit, delete, resolve, and reopen comments.
 - Retry failed comments, check out merge request branches, and open files in your local repository.
 - Navigate to definitions from the new (right) side of diffs, including added files and symbols.
+- Browse MR commits and compare individual commits with their first parent inside VS Code.
 
 AI, Duo, language-server features, pipelines, issues, snippets, and security scanning are not activated
 or contributed. The package includes only the review extension bundle and merge-request webview.
@@ -34,6 +35,23 @@ or contributed. The package includes only the review extension bundle and merge-
 Credentials are stored using VS Code SecretStorage. HTTP is accepted for internal installations,
 but it transmits credentials without transport encryption; prefer HTTPS where available.
 Git remotes using SSH are supported; the API URL comes from the authenticated account.
+
+## Commit History
+
+Expand an MR, then **Commits**, to see its current commits with title, short SHA, author, and
+timestamp. Hover over a commit for the full SHA and message. Expand a commit and select a changed
+file to open its diff in VS Code. The left side is the first parent, and the right side is the
+selected commit; an initial commit has an empty left side. Added, deleted, and renamed paths are
+handled at those exact revisions. **Open commit in GitLab** opens the commit's web page.
+
+Commit lists and changed files load only when expanded, in pages of 100. Expand **More commits…**
+or **More files…** to continue. Collapse and expand to reload or retry. GitLab may limit large diffs;
+binary files or omitted diff details are indicated, and the GitLab link remains available.
+The commit list reflects current server membership, so refresh it after a rebase or force push.
+
+Individual commit comparisons are read-only browsing views. MR comments, viewed-file checkboxes,
+and worktree-backed semantic navigation/hover remain available in the overall MR diff. They are
+not applied to individual commit comparisons, even when the selected commit is the latest MR head.
 
 ## Code Navigation
 
@@ -118,7 +136,7 @@ npm run test:unit -- --runInBand src/desktop/review src/common/gitlab/check_vers
 node --test scripts/utils/packages.test.mjs scripts/utils/third_party_notices.test.mjs
 npm run test:review
 npm run package
-code --install-extension dist-desktop/review-tools-for-gitlab-1.0.2.vsix --force
+code --install-extension dist-desktop/review-tools-for-gitlab-1.0.3.vsix --force
 ```
 
 Reload the VS Code window after installation. `npm run build:desktop` produces the unpacked extension
@@ -151,7 +169,7 @@ excluded from the extension package. The extension ID and GitHub repository name
 
 Version 1.0.0 was reissued with extension ID `zubinzhang.review-tools-for-gitlab`. If you installed
 the earlier `zubinzhang.gitlab-review` build, uninstall that extension before enabling this one,
-install `review-tools-for-gitlab-1.0.2.vsix`, reload VS Code, and authenticate again. VS Code treats
+install `review-tools-for-gitlab-1.0.3.vsix`, reload VS Code, and authenticate again. VS Code treats
 the new ID as a separate extension; account secrets and viewed-file state are not migrated.
 Prepared review worktrees under the earlier ID are recognized and reused, with duplicate and
 completed-review caches subject to the cleanup rules above.

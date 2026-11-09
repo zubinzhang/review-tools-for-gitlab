@@ -400,6 +400,13 @@ export class ReviewNavigation
       return undefined;
     }
     const params = fromReviewUri(document.uri);
+    if (params.comparison === 'commit') {
+      if (explicit)
+        await vscode.window.showInformationMessage(
+          'Open the overall MR diff for code navigation and comments. Commit comparisons are read-only.',
+        );
+      return undefined;
+    }
     if (!params.exists || !params.commit || params.side === 'base') {
       if (explicit)
         await vscode.window.showInformationMessage(

@@ -27,6 +27,7 @@ import { reviewProjectId } from '../review_tree_id';
 import { ChangedFolderItem, FolderTreeItem } from './changed_folder_item';
 import { ItemModel } from './item_model';
 import { ChangedFileItem, HasCommentsFn, getChangeType } from './changed_file_item';
+import { MrCommitsItem } from './mr_commits_item';
 
 const isTextDiffDiscussion = (discussion: GqlDiscussion): discussion is GqlTextDiffDiscussion => {
   const firstNote = discussion.notes.nodes[0];
@@ -87,6 +88,8 @@ export class MrItemModel extends ItemModel {
 
   #versionLoad?: Promise<RestMrVersion>;
 
+  #commits: MrCommitsItem;
+
   readonly mr: RestMr;
 
   readonly projectInRepository: ProjectInRepository;
@@ -99,6 +102,7 @@ export class MrItemModel extends ItemModel {
     super();
     this.mr = mr;
     this.projectInRepository = projectInRepository;
+    this.#commits = new MrCommitsItem(mr, projectInRepository, `${this.parentId}/mr/${mr.id}`);
   }
 
   getTreeItem(): vscode.TreeItem {
@@ -147,7 +151,7 @@ export class MrItemModel extends ItemModel {
     return [];
   }
 
-  async getChildren(): Promise<vscode.TreeItem[]> {
+  async getChildren(): Promise<(vscode.TreeItem | ItemModel)[]> {
     try {
       const mrVersion = await this.getReviewVersion();
 
@@ -194,10 +198,10 @@ export class MrItemModel extends ItemModel {
           ? new ChangedFolderItem('', createChangedFiles(false)).getChildren()
           : createChangedFiles(true).map(file => file.item);
 
-      return [this.#overviewItem, ...changedFiles];
+      return [this.#overviewItem, this.#commits, ...changedFiles];
     } catch (e) {
       handleError(new UserFriendlyError('Failed to fetch details of the MR', e));
-      return [this.#overviewItem];
+      return [this.#overviewItem, this.#commits];
     }
   }
 
@@ -223,7 +227,7 @@ export class MrItemModel extends ItemModel {
       this.mr.title,
       userCanComment ? new CommentingRangeProvider(this.mr, mrVersion) : undefined,
     );
-    this.setDisposableChildren([commentController]);
+    this.setDisposableChildren([commentController, this.#commits]);
 
     discussions.forEach(discussion => {
       const { position } = firstNoteFrom(discussion);

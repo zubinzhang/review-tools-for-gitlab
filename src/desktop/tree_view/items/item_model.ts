@@ -5,7 +5,7 @@ export abstract class ItemModel implements vscode.Disposable {
 
   abstract getTreeItem(): vscode.TreeItem;
 
-  abstract getChildren(): Promise<vscode.TreeItem[] | ItemModel[]>;
+  abstract getChildren(): Promise<(vscode.TreeItem | ItemModel)[]>;
 
   protected setDisposableChildren(children: vscode.Disposable[]): void {
     this.#disposableChildren

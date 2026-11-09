@@ -6,7 +6,8 @@ const { graphql, HttpResponse } = require('msw');
 const { IssuableDataProvider } = require('../../src/desktop/tree_view/issuable_data_provider');
 const { MrItemModel } = require('../../src/desktop/tree_view/items/mr_item_model');
 const { submitEdit, createComment } = require('../../src/desktop/commands/mr_discussion_commands');
-const { toReviewUri } = require('../../src/desktop/review/review_uri');
+const { toReviewUri, fromReviewUri } = require('../../src/desktop/review/review_uri');
+const { CommentingRangeProvider } = require('../../src/desktop/review/commenting_range_provider');
 const {
   getSidebarViewState,
   setSidebarViewState,
@@ -29,6 +30,7 @@ const {
   getServer,
   createJsonEndpoint,
   createQueryTextEndpoint,
+  createQueryJsonEndpoint,
 } = require('./test_infrastructure/mock_server');
 const { getRepositoryRoot } = require('./test_infrastructure/helpers');
 
@@ -105,7 +107,8 @@ describe('MR Review', () => {
     const mrContent = await dataProvider.getChildren(mrItemModel);
     assert.strictEqual(getTreeItem(mrContent[0]).label, 'Overview');
 
-    const mrFiles = mrContent.slice(1);
+    assert.strictEqual(getTreeItem(mrContent[1]).label, 'Commits');
+    const mrFiles = mrContent.slice(2);
     assert.deepStrictEqual(
       mrFiles.map(f => getTreeItem(f).resourceUri.path),
       [
@@ -122,6 +125,76 @@ describe('MR Review', () => {
       mrFiles.map(f => getTreeItem(f).description),
       ['', '', '', 'src', 'src/assets', ''],
     );
+  });
+
+  it('browses MR commits and opens an exact first-parent diff inside VS Code', async () => {
+    const commit = {
+      id: versionResponse.head_commit_sha,
+      parent_ids: ['d'.repeat(40)],
+      title: 'Change a helper',
+      message: 'Change a helper\n\nCommit details',
+      author_name: 'Reviewer',
+      committed_date: '2026-11-09T04:00:00Z',
+    };
+    server.use(
+      createQueryJsonEndpoint('/projects/278964/merge_requests/33824/commits', {
+        '?page=1&per_page=100': [commit],
+      }),
+      createQueryJsonEndpoint(`/projects/278964/repository/commits/${commit.id}/diff`, {
+        '?page=1&per_page=100': [
+          {
+            old_path: 'src/test.js',
+            new_path: 'src/test.js',
+            new_file: false,
+            deleted_file: false,
+            renamed_file: false,
+            diff: '@@ -1 +1 @@\n-parent\n+head\n',
+          },
+        ],
+      }),
+      createQueryJsonEndpoint('/projects/278964/repository/files/src%2Ftest.js', {
+        [`?ref=${commit.id}`]: { size: 11 },
+        [`?ref=${commit.parent_ids[0]}`]: { size: 13 },
+      }),
+      createQueryTextEndpoint('/projects/278964/repository/files/src%2Ftest.js/raw', {
+        [`?ref=${commit.id}`]: 'Commit head',
+        [`?ref=${commit.parent_ids[0]}`]: 'Commit parent',
+      }),
+    );
+    const content = await dataProvider.getChildren(mrItemModel);
+    const commits = content.find(child => getTreeItem(child).label === 'Commits');
+    const [commitItem] = await dataProvider.getChildren(commits);
+    assert.strictEqual(getTreeItem(commitItem).label, commit.title);
+    assert.strictEqual(dataProvider.getParent(commitItem), commits);
+    const [link, changed] = await dataProvider.getChildren(commitItem);
+    assert.strictEqual(link.command.command, 'gitlab-review.openCommitInGitLab');
+    assert.strictEqual(dataProvider.getParent(changed), commitItem);
+    const [original, modified] = changed.command.arguments;
+    assert.strictEqual(fromReviewUri(original).commit, commit.parent_ids[0]);
+    assert.strictEqual(fromReviewUri(modified).commit, commit.id);
+    assert.strictEqual(fromReviewUri(modified).comparison, 'commit');
+    await vscode.commands.executeCommand(changed.command.command, ...changed.command.arguments);
+    try {
+      const { input } = vscode.window.tabGroups.activeTabGroup.activeTab;
+      assert.ok(input instanceof vscode.TabInputTextDiff);
+      assert.strictEqual(input.original.toString(), original.toString());
+      assert.strictEqual(input.modified.toString(), modified.toString());
+      assert.strictEqual(
+        (await vscode.workspace.openTextDocument(original)).getText(),
+        'Commit parent',
+      );
+      const document = await vscode.workspace.openTextDocument(modified);
+      assert.strictEqual(document.getText(), 'Commit head');
+      assert.deepStrictEqual(
+        new CommentingRangeProvider(
+          openMergeRequestResponse,
+          versionResponse,
+        ).provideCommentingRanges(document),
+        [],
+      );
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    }
   });
 
   describe('discussions', () => {
@@ -192,7 +265,7 @@ describe('MR Review', () => {
       const mrContent = await dataProvider.getChildren(mrItemModel);
       assert.strictEqual(mrContent[0].label, 'Overview');
 
-      mrFiles = mrContent.slice(1);
+      mrFiles = mrContent.slice(2);
     });
 
     it('should show the correct diff title', () => {

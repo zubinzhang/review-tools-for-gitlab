@@ -19,7 +19,13 @@ const createNewComment = async (
   text: string,
   thread: vscode.CommentThread,
 ): Promise<GitLabCommentThread> => {
-  const { path, commit, repositoryRoot, mrId, projectId, side, exists } = fromReviewUri(thread.uri);
+  const { path, commit, repositoryRoot, mrId, projectId, side, exists, comparison } = fromReviewUri(
+    thread.uri,
+  );
+  if (comparison === 'commit')
+    throw new Error(
+      'Open the overall MR diff to add MR comments. Commit comparisons are read-only.',
+    );
   const projectInRepository = getProjectRepository().getProjectOrFail(repositoryRoot);
   const cachedMr = mrCache.getMr(mrId, projectInRepository);
   assert(cachedMr);

@@ -6,7 +6,7 @@ import {
 import { GqlTextDiffNote } from '../gitlab/graphql/shared';
 import { GitLabComment } from '../review/gitlab_comment';
 import { GitLabCommentThread } from '../review/gitlab_comment_thread';
-import { toReviewUri } from '../review/review_uri';
+import { fromReviewUri, toReviewUri } from '../review/review_uri';
 import { mr, mrVersion, projectInRepository } from '../test_utils/entities';
 import { FAILED_COMMENT_CONTEXT, SYNCED_COMMENT_CONTEXT } from '../constants';
 import { mrCache } from '../gitlab/mr_cache';
@@ -189,6 +189,15 @@ describe('MR discussion commands', () => {
             thread: createVsThread(mrDiff.new_path, 'outdated-head', 7),
           }),
         ).rejects.toThrow('outdated');
+        expect(mockedCreateDiffNote).not.toHaveBeenCalled();
+      });
+
+      it('rejects commit comparisons even when the commit matches the current MR head', async () => {
+        const thread = createVsThread(mrDiff.new_path, customMrVersion.head_commit_sha, 7);
+        Object.defineProperty(thread, 'uri', {
+          value: toReviewUri({ ...fromReviewUri(thread.uri), comparison: 'commit' }),
+        });
+        await expect(createComment({ text: 'comment', thread })).rejects.toThrow('overall MR diff');
         expect(mockedCreateDiffNote).not.toHaveBeenCalled();
       });
 

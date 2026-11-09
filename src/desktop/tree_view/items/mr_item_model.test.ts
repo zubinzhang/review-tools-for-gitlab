@@ -18,6 +18,7 @@ import { InMemoryMemento } from '../../../../test/integration/test_infrastructur
 import { ChangedFolderItem } from './changed_folder_item';
 import { ChangedFileItem } from './changed_file_item';
 import { MrItemModel } from './mr_item_model';
+import { MrCommitsItem } from './mr_commits_item';
 
 jest.mock('../../gitlab/get_gitlab_service');
 
@@ -143,7 +144,9 @@ describe('MrItemModel', () => {
   it('should return changed file items as children', async () => {
     gitLabService.getMrDiff = jest.fn().mockResolvedValue(mrVersion);
     await setSidebarViewState(SidebarViewState.ListView);
-    const [, changedItem] = await item.getChildren();
+    const [, commits, changedItem] = await item.getChildren();
+    expect(commits).toBeInstanceOf(MrCommitsItem);
+    if (!(changedItem instanceof vscode.TreeItem)) throw new Error('Expected changed file');
     expect(changedItem.resourceUri?.path).toBe('.deleted.yml');
     expect(changedItem.resourceUri?.query).toMatch(`${CHANGE_TYPE_QUERY_KEY}=deleted`);
     expect(changedItem.resourceUri?.query).toMatch(`${HAS_COMMENTS_QUERY_KEY}=false`);
@@ -152,7 +155,9 @@ describe('MrItemModel', () => {
   it('should return changed file items in tree view', async () => {
     gitLabService.getMrDiff = jest.fn().mockResolvedValue(mrVersion);
     await setSidebarViewState(SidebarViewState.TreeView);
-    const [, folderItem, fileItem] = await item.getChildren();
+    const [, , folderItem, fileItem] = await item.getChildren();
+    if (!(folderItem instanceof vscode.TreeItem) || !(fileItem instanceof vscode.TreeItem))
+      throw new Error('Expected file tree items');
 
     expect(folderItem).toBeInstanceOf(ChangedFolderItem);
     expect(folderItem.label).toBe('src');
@@ -168,7 +173,8 @@ describe('MrItemModel', () => {
     const children = await item.getChildren();
 
     // returns the overview item instead of throwing
-    expect(children.length).toBe(1);
+    expect(children.length).toBe(2);
+    expect(children[1]).toBeInstanceOf(MrCommitsItem);
   });
 
   it('shares an in-flight diff version load between automatic preparation and expanding the MR', async () => {

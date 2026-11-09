@@ -81,6 +81,12 @@ describe('CommentingRangeProvider', () => {
   });
 
   it.each([
+    {
+      path: diffFile.new_path,
+      commit: mrVersion.head_commit_sha,
+      exists: true,
+      comparison: 'commit' as const,
+    },
     { path: '/unchanged.ts', commit: mrVersion.head_commit_sha, exists: true },
     { path: diffFile.new_path, commit: 'outdated-head', exists: true },
     { path: diffFile.new_path, commit: mrVersion.head_commit_sha, exists: false },

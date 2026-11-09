@@ -22,6 +22,11 @@ describe('review_uri.ts', () => {
   });
 
   describe('fromReviewUri', () => {
+    it('preserves commit comparison scope and keeps it distinct from the whole MR', () => {
+      const params = { ...reviewUriParams, comparison: 'commit' as const };
+      expect(fromReviewUri(toReviewUri(params))).toEqual(params);
+      expect(toReviewUri(params).toString()).not.toBe(toReviewUri(reviewUriParams).toString());
+    });
     it('returns the correct string', () => {
       const result = fromReviewUri(toReviewUri(reviewUriParams));
 

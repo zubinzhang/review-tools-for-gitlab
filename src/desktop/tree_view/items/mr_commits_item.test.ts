@@ -1,15 +1,22 @@
 import * as vscode from 'vscode';
 import { createFakePartial } from '../../../common/test_utils/create_fake_partial';
-import { mr, projectInRepository, diffFile } from '../../test_utils/entities';
+import { mr, mrVersion, projectInRepository, diffFile } from '../../test_utils/entities';
 import { getGitLabService } from '../../gitlab/get_gitlab_service';
 import { GitLabService } from '../../gitlab/gitlab_service';
 import { fromReviewUri, isEmptyFileUri } from '../../review/review_uri';
+import { changeTypeDecorationProvider } from '../../review/change_type_decoration_provider';
+import { hasCommentsDecorationProvider } from '../../review/has_comments_decoration_provider';
+import { viewedDecorationProvider } from '../../review/viewed_decoration_provider';
+import { viewedFilesStore } from '../../review/viewed_files_store';
+import { InMemoryMemento } from '../../../../test/integration/test_infrastructure/in_memory_memento';
 import { setSidebarViewState, SidebarViewState } from '../sidebar_view_state';
 import { PROGRAMMATIC_COMMANDS } from '../../command_names';
 import { MrCommitsItem } from './mr_commits_item';
 import { MrCommitItem, ReviewCommit, CommitSelection } from './mr_commit_item';
 import { ErrorItem } from './error_item';
 import { CommitChangesItem } from './commit_changes_item';
+import { ChangedFileItem } from './changed_file_item';
+import { ChangedFolderItem } from './changed_folder_item';
 
 jest.mock('../../gitlab/get_gitlab_service');
 
@@ -27,6 +34,9 @@ describe('MR commit browsing', () => {
 
   beforeEach(async () => {
     await setSidebarViewState(SidebarViewState.ListView);
+    viewedFilesStore.init(
+      createFakePartial<vscode.ExtensionContext>({ globalState: new InMemoryMemento() }),
+    );
     service = createFakePartial<GitLabService>({ fetchFromApi: jest.fn() });
     jest.mocked(getGitLabService).mockReturnValue(service);
     selection = { getSelected: () => undefined, select: jest.fn() };
@@ -138,10 +148,60 @@ describe('MR commit browsing', () => {
       });
       expect(title).toContain(commit.id.slice(0, 8));
       expect(changed.checkboxState).toBeUndefined();
+      const overall = new ChangedFileItem(mr, mrVersion, file, '/repo', () => false, 'mr-key');
+      expect(changed.resourceUri?.path).toBe(overall.resourceUri?.path);
+      expect(changed.iconPath).toEqual(overall.iconPath);
+      expect(changed.description).toBe(overall.description);
+      const { token } = new vscode.CancellationTokenSource();
+      expect(
+        changeTypeDecorationProvider.provideFileDecoration(changed.resourceUri!, token),
+      ).toEqual(changeTypeDecorationProvider.provideFileDecoration(overall.resourceUri!, token));
+      expect(
+        hasCommentsDecorationProvider.provideFileDecoration(changed.resourceUri!, token),
+      ).toBeUndefined();
+      expect(viewedDecorationProvider.provideFileDecoration(changed.resourceUri!)).toBeUndefined();
       expect(service.fetchFromApi).toHaveBeenCalledWith(
         expect.objectContaining({
           path: `/projects/${mr.project_id}/repository/commits/${commit.id}/diff`,
         }),
+      );
+    },
+  );
+
+  it.each([SidebarViewState.TreeView, SidebarViewState.ListView])(
+    'uses the same file presentation as MR review in %s mode',
+    async layout => {
+      await setSidebarViewState(layout);
+      const file = {
+        ...diffFile,
+        old_path: 'internal/actions/ha.go',
+        new_path: 'internal/actions/ha.go',
+      };
+      jest.mocked(service.fetchFromApi).mockResolvedValue([file]);
+      const children = await new CommitChangesItem(
+        commit,
+        mr,
+        projectInRepository,
+        'commits',
+      ).getChildren();
+      const changed =
+        layout === SidebarViewState.TreeView
+          ? (children[1] as ChangedFolderItem).getChildren()[0]
+          : children[1];
+      const overall = new ChangedFileItem(
+        mr,
+        mrVersion,
+        file,
+        '/repo',
+        () => false,
+        'mr-key',
+        layout === SidebarViewState.ListView,
+      );
+      expect(changed.resourceUri?.path).toBe(overall.resourceUri?.path);
+      expect(changed.iconPath).toEqual(overall.iconPath);
+      expect(changed.description).toBe(overall.description);
+      expect(changed.description).toBe(
+        layout === SidebarViewState.ListView ? 'internal/actions' : undefined,
       );
     },
   );

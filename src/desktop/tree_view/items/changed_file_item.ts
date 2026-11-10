@@ -1,28 +1,19 @@
 import { posix as path } from 'path';
 import * as vscode from 'vscode';
-import { isEmptyFileUri, toReviewUri, ChangeType } from '../../review/review_uri';
+import { isEmptyFileUri, toReviewUri } from '../../review/review_uri';
 import { VS_COMMANDS } from '../../../common/command_names';
 import {
-  ADDED,
-  DELETED,
-  RENAMED,
-  MODIFIED,
-  CHANGE_TYPE_QUERY_KEY,
   HAS_COMMENTS_QUERY_KEY,
   VIEWED_MR_KEY_QUERY_KEY,
   VIEWED_FILE_ID_QUERY_KEY,
   VIEWED_HASH_QUERY_KEY,
 } from '../../constants';
 import { getFileContentHash, viewedFilesStore } from '../../review/viewed_files_store';
+import { DiffFileItem, getChangeType } from './diff_file_item';
+
+export { getChangeType } from './diff_file_item';
 
 export type HasCommentsFn = (reviewUri: vscode.Uri) => boolean;
-
-export const getChangeType = (file: RestDiffFile): ChangeType => {
-  if (file.new_file) return ADDED;
-  if (file.deleted_file) return DELETED;
-  if (file.renamed_file) return RENAMED;
-  return MODIFIED;
-};
 
 // All extensions supported by VS Code's built-in Media Previewer.
 // https://github.com/microsoft/vscode/blob/ba38f8a5eeb81c05dbdade3e1657e233d770f717/extensions/media-preview/package.json
@@ -75,7 +66,7 @@ export const getBaseAndHeadUri = (
   return { baseFileUri, headFileUri };
 };
 
-export class ChangedFileItem extends vscode.TreeItem {
+export class ChangedFileItem extends DiffFileItem {
   headFileUri: vscode.Uri;
 
   baseFileUri: vscode.Uri;
@@ -91,11 +82,7 @@ export class ChangedFileItem extends vscode.TreeItem {
     mrKey: string,
     shownInList = true,
   ) {
-    super(vscode.Uri.file(file.new_path));
-    if (shownInList) {
-      // we don't need the folder information if the item is in tree view
-      this.description = path.dirname(`/${file.new_path}`).split('/').slice(1).join('/');
-    }
+    super(file, shownInList);
     this.contextValue = 'changed-file-item';
     const uris = getBaseAndHeadUri(mr, mrVersion, file, repositoryPath);
     this.headFileUri = uris.headFileUri;
@@ -116,7 +103,7 @@ export class ChangedFileItem extends vscode.TreeItem {
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
     const query = new URLSearchParams([
-      [CHANGE_TYPE_QUERY_KEY, getChangeType(file)],
+      ...new URLSearchParams(this.resourceUri?.query),
       [HAS_COMMENTS_QUERY_KEY, String(hasComments)],
       [VIEWED_MR_KEY_QUERY_KEY, this.viewedState.mrKey],
       [VIEWED_FILE_ID_QUERY_KEY, this.viewedState.fileId],

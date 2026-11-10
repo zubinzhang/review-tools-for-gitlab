@@ -7,6 +7,9 @@ const { IssuableDataProvider } = require('../../src/desktop/tree_view/issuable_d
 const { MrItemModel } = require('../../src/desktop/tree_view/items/mr_item_model');
 const { ChangedFileItem } = require('../../src/desktop/tree_view/items/changed_file_item');
 const { viewedFilesStore } = require('../../src/desktop/review/viewed_files_store');
+const {
+  changeTypeDecorationProvider,
+} = require('../../src/desktop/review/change_type_decoration_provider');
 const { submitEdit, createComment } = require('../../src/desktop/commands/mr_discussion_commands');
 const { toReviewUri, fromReviewUri } = require('../../src/desktop/review/review_uri');
 const { CommentingRangeProvider } = require('../../src/desktop/review/commenting_range_provider');
@@ -213,6 +216,16 @@ describe('MR Review', () => {
       assert.ok(selectedContent.every(child => !(child instanceof ChangedFileItem)));
       const [changed] = files;
       assert.strictEqual(changed.checkboxState, undefined);
+      const overall = allFiles.find(file => file.resourceUri.path === '/src/test.js');
+      assert.strictEqual(changed.resourceUri.path, overall.resourceUri.path);
+      assert.deepStrictEqual(changed.iconPath, overall.iconPath);
+      assert.strictEqual(changed.label, overall.label);
+      assert.strictEqual(changed.description, overall.description);
+      const { token } = new vscode.CancellationTokenSource();
+      assert.deepStrictEqual(
+        changeTypeDecorationProvider.provideFileDecoration(changed.resourceUri, token),
+        changeTypeDecorationProvider.provideFileDecoration(overall.resourceUri, token),
+      );
       assert.strictEqual(link.command.command, 'gitlab-review.openCommitInGitLab');
       const [original, modified] = changed.command.arguments;
       assert.strictEqual(fromReviewUri(original).commit, commit.parent_ids[0]);

@@ -3,6 +3,15 @@
 Changes to Review Tools for GitLab are recorded here. The upstream changelog is retained below
 for provenance; upstream entries do not describe features enabled in this review-only fork.
 
+## [1.0.5](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.5) — 2026-11-10
+
+### Fixed
+
+- Share file presentation between the overall MR and individual commit views: use the same
+  language icons, change-status badges and colors, and directory/list path descriptions.
+- Remove redundant change-type text and full paths from individual commit file rows. MR comments
+  and viewed-file checkboxes remain scoped to the overall MR review.
+
 ## [1.0.4](https://github.com/zubinzhang/review-tools-for-gitlab/releases/tag/v1.0.4) — 2026-11-09
 
 ### Changed

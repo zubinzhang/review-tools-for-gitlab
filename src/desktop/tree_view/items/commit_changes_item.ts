@@ -6,7 +6,7 @@ import { getGitLabService } from '../../gitlab/get_gitlab_service';
 import { ProjectInRepository } from '../../gitlab/new_project';
 import { toReviewUri } from '../../review/review_uri';
 import { getSidebarViewState, SidebarViewState } from '../sidebar_view_state';
-import { getChangeType } from './changed_file_item';
+import { DiffFileItem, getChangeType } from './diff_file_item';
 import { ErrorItem } from './error_item';
 import { ReviewCommit } from './mr_commit_item';
 import { ChangedFolderItem } from './changed_folder_item';
@@ -52,14 +52,15 @@ export class CommitChangesItem {
         arguments: [this.project.project.webUrl, this.commit.id],
       };
       children.push(link);
+      const shownInList = getSidebarViewState() === SidebarViewState.ListView;
       const changed = files.map(file => ({
         path: file.new_path || file.old_path,
-        item: this.#fileItem(file),
+        item: this.#fileItem(file, shownInList),
       }));
       children.push(
-        ...(getSidebarViewState() === SidebarViewState.TreeView
-          ? new ChangedFolderItem('', changed).getChildren()
-          : changed.map(file => file.item)),
+        ...(shownInList
+          ? changed.map(file => file.item)
+          : new ChangedFolderItem('', changed).getChildren()),
       );
       if (!files.length) children.push(new vscode.TreeItem('No changed files returned by GitLab.'));
       if (this.#repeatedPage || files.some(file => !file.diff))
@@ -96,7 +97,7 @@ export class CommitChangesItem {
     return [...unique, ...(await this.#loadPages(page + 1, seen))];
   }
 
-  #fileItem(file: RestDiffFile): vscode.TreeItem {
+  #fileItem(file: RestDiffFile, shownInList: boolean): vscode.TreeItem {
     const parent = this.commit.parent_ids[0];
     const common = {
       repositoryRoot: this.project.pointer.repository.rootFsPath,
@@ -119,11 +120,9 @@ export class CommitChangesItem {
       exists: !file.deleted_file,
       side: 'head',
     });
-    const item = new vscode.TreeItem(path.posix.basename(file.new_path || file.old_path));
+    const item = new DiffFileItem(file, shownInList);
     item.id = `${this.parentId}/commit/${this.commit.id}/file/${file.old_path}:${file.new_path}`;
-    item.description = `${getChangeType(file)} · ${file.new_path || file.old_path}`;
     item.tooltip = `${file.old_path} → ${file.new_path}\nRead-only commit diff. Add MR comments in the overall MR diff.`;
-    item.iconPath = vscode.ThemeIcon.File;
     item.contextValue = 'commit-file-item';
     item.command = {
       command: 'vscode.diff',
